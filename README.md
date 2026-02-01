@@ -102,6 +102,7 @@ your-project/
 │       ├── lint/              # /lint - Run linters
 │       ├── test/              # /test - Run tests
 │       ├── check/             # /check - Full validation
+│       ├── docs/              # /docs - Documentation review
 │       ├── init-from-template/ # /init-from-template
 │       └── sync-config/       # /sync-config
 ├── src/your_package/
@@ -121,6 +122,7 @@ Once installed, these skills are available in Claude Code:
 | `/test` | Run pytest with coverage reporting |
 | `/review` | Review code for bugs and common issues |
 | `/check` | Full validation: lint → test → review |
+| `/docs` | Review documentation and comments for consistency |
 | `/init-from-template` | Create a new project from this template |
 | `/sync-config` | Compare your config against latest template |
 
