@@ -12,9 +12,30 @@ A reusable Claude Code configuration template for Python projects. Provides sens
 
 ## Installation
 
-### New Project
+### Quick Install (New Project)
 
-Clone this template and customize it for your project:
+```bash
+curl -fsSL https://raw.githubusercontent.com/janewilkin/claude-project-template/main/install.sh | bash -s -- my-project
+```
+
+This creates a new project with:
+- Package renamed to match your project
+- Git repository initialized
+- Ready to use immediately
+
+### Quick Install (Existing Project)
+
+```bash
+cd your-project
+curl -fsSL https://raw.githubusercontent.com/janewilkin/claude-project-template/main/install.sh | bash -s -- --existing
+```
+
+This adds the `.claude/` configuration to your current directory.
+
+### Manual Installation
+
+<details>
+<summary>New project (manual steps)</summary>
 
 ```bash
 # Clone the template
@@ -32,9 +53,10 @@ mv src/your_package src/my_package
 # Update CLAUDE.md with your project description
 ```
 
-### Existing Project
+</details>
 
-Copy the Claude configuration to your existing project:
+<details>
+<summary>Existing project (manual steps)</summary>
 
 ```bash
 # Clone the template somewhere temporary
@@ -50,6 +72,8 @@ cp /tmp/claude-template/.gitignore your-project/      # merge with existing if n
 # Clean up
 rm -rf /tmp/claude-template
 ```
+
+</details>
 
 ### Development Setup
 
