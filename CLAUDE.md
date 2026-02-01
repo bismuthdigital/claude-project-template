@@ -81,3 +81,5 @@ This project includes Claude Code skills for development:
 | `/review` | Code review for issues |
 | `/docs` | Review documentation and comments |
 | `/check` | Full validation pipeline |
+| `/init-from-template` | Create new project from template |
+| `/sync-config` | Compare config against template |

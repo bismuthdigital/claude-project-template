@@ -7,7 +7,7 @@ A reusable Claude Code configuration template for Python projects. Provides sens
 - **No prompts for safe operations** - Edit Python files, run tests/linters, search docs without interruption
 - **Auto-linting** - Runs ruff after every file edit
 - **Code review reminders** - Suggests `/review` after implementation work
-- **Custom skills** - `/lint`, `/test`, `/review`, `/check` for common workflows
+- **Custom skills** - `/lint`, `/test`, `/review`, `/check`, `/docs`, `/sync-config` for common workflows
 - **Python tooling** - Pre-configured ruff, pytest, coverage, and mypy
 
 ## Installation
