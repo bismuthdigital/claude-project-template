@@ -10,40 +10,59 @@ A reusable Claude Code configuration template for Python projects. Provides sens
 - **Custom skills** - `/lint`, `/test`, `/review`, `/check` for common workflows
 - **Python tooling** - Pre-configured ruff, pytest, coverage, and mypy
 
-## Quick Start
+## Installation
 
-### Option 1: Create a New Project
+### New Project
 
-Use the `/init-from-template` skill in any Claude Code session:
-
-```
-/init-from-template my-project-name
-```
-
-This will:
-1. Clone this template
-2. Rename the package to match your project
-3. Initialize a fresh git repository
-
-### Option 2: Manual Setup
+Clone this template and customize it for your project:
 
 ```bash
+# Clone the template
 git clone https://github.com/janewilkin/claude-project-template.git my-project
 cd my-project
-rm -rf .git && git init
 
-# Rename the package
+# Remove template's git history and start fresh
+rm -rf .git
+git init
+
+# Rename the package to match your project
 mv src/your_package src/my_package
-# Update pyproject.toml with your project name
+
+# Update pyproject.toml: change "your-project-name" and "your_package"
+# Update CLAUDE.md with your project description
 ```
 
-### Option 3: Add to Existing Project
+### Existing Project
 
-Copy the `.claude/` directory to your project:
+Copy the Claude configuration to your existing project:
 
 ```bash
-cp -r claude-project-template/.claude your-project/
+# Clone the template somewhere temporary
+git clone https://github.com/janewilkin/claude-project-template.git /tmp/claude-template
+
+# Copy the .claude directory to your project
+cp -r /tmp/claude-template/.claude your-project/
+
+# Optionally copy the Python tooling config
+cp /tmp/claude-template/pyproject.toml your-project/  # merge with existing if needed
+cp /tmp/claude-template/.gitignore your-project/      # merge with existing if needed
+
+# Clean up
+rm -rf /tmp/claude-template
 ```
+
+### Development Setup
+
+After installation, set up your Python environment:
+
+```bash
+cd your-project
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+This installs ruff, pytest, pytest-cov, and mypy.
 
 ## Project Structure
 
@@ -70,6 +89,8 @@ your-project/
 
 ## Available Skills
 
+Once installed, these skills are available in Claude Code:
+
 | Skill | Description |
 |-------|-------------|
 | `/lint` | Run ruff check, ruff format, and mypy |
@@ -77,7 +98,22 @@ your-project/
 | `/review` | Review code for bugs and common issues |
 | `/check` | Full validation: lint → test → review |
 | `/init-from-template` | Create a new project from this template |
-| `/sync-config` | Compare config against latest template |
+| `/sync-config` | Compare your config against latest template |
+
+## Keeping Up to Date
+
+After installing, you can check for template updates using the `/sync-config` skill:
+
+```
+/sync-config           # Summary of differences
+/sync-config --detailed # Full diffs
+```
+
+This compares your project against the latest template and shows:
+- New permissions or deny rules
+- Updated hooks
+- New skills available
+- Python tooling updates
 
 ## Configuration
 
@@ -112,29 +148,6 @@ Pre-configured with:
 - **pytest** - Test discovery in `tests/`, verbose output
 - **coverage** - 80% minimum, branch coverage
 - **mypy** - Strict type checking
-
-## Keeping Up to Date
-
-Run `/sync-config` to compare your project against the latest template:
-
-```
-/sync-config           # Summary of differences
-/sync-config --detailed # Full diffs
-```
-
-This shows:
-- New permissions or deny rules
-- Updated hooks
-- New skills available
-- Python tooling updates
-
-## Development Setup
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -e ".[dev]"
-```
 
 ## Customization
 
