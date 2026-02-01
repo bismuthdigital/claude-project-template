@@ -45,6 +45,10 @@
       "Bash(git branch *)",
       "Bash(git checkout *)",
       "Bash(git switch *)",
+      "Bash(git clone *)",
+      "Bash(git init)",
+      "Bash(curl *)",
+      "Bash(mktemp *)",
       "Bash(ls *)",
       "Bash(ls)",
       "Bash(mkdir *)",
@@ -79,6 +83,16 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-format.sh\"",
             "timeout": 60,
             "statusMessage": "Running linters and formatters..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/config-suggest.sh\"",
+            "timeout": 10
           }
         ]
       }
