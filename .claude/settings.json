@@ -1,0 +1,99 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "WebFetch(domain:docs.python.org)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:peps.python.org)",
+      "WebFetch(domain:packaging.python.org)",
+      "WebFetch(domain:typing.readthedocs.io)",
+      "WebFetch(domain:ruff.rs)",
+      "WebFetch(domain:docs.astral.sh)",
+      "WebFetch(domain:pytest.org)",
+      "WebFetch(domain:docs.pytest.org)",
+      "WebFetch(domain:mypy.readthedocs.io)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:stackoverflow.com)",
+      "Edit(**.py)",
+      "Edit(.claude/**)",
+      "Write(**.py)",
+      "Write(.claude/**)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(pip install -e *)",
+      "Bash(uv *)",
+      "Bash(pytest *)",
+      "Bash(python -m pytest *)",
+      "Bash(python3 -m pytest *)",
+      "Bash(ruff check *)",
+      "Bash(ruff format *)",
+      "Bash(ruff *)",
+      "Bash(black *)",
+      "Bash(mypy *)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(ls *)",
+      "Bash(ls)",
+      "Bash(mkdir *)",
+      "Bash(source *)",
+      "Bash(. .venv/bin/activate *)",
+      "Bash(chmod +x *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/secrets/**)",
+      "Read(**/*credentials*)",
+      "Read(**/*_key*)",
+      "Read(**/*.pem)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(curl * | *)",
+      "Bash(wget * | *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-format.sh\"",
+            "timeout": 60,
+            "statusMessage": "Running linters and formatters..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Review the recent tool uses in this conversation. Determine if:\n1. Python code was edited or created (Edit or Write on .py files)\n2. The changes appear to be implementation work (not just exploration, reading, or discussion)\n3. A code review would be beneficial to catch issues\n\nIf all conditions are met and no /review has been run recently, respond with:\n{\"continue\": false, \"stopReason\": \"Consider running /review to check for common issues before finishing.\"}\n\nIf this is just exploration, Q&A, configuration, or /review was already run, respond with:\n{\"continue\": true}\n\nContext: $ARGUMENTS",
+            "timeout": 30,
+            "model": "haiku"
+          }
+        ]
+      }
+    ]
+  }
+}
