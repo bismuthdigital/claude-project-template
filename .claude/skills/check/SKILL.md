@@ -28,6 +28,11 @@ If tests fail, note the failures but continue to review.
 ### Step 3: Review
 Run `/review recent` to check for common issues in changed code.
 
+### Step 4: Bash Review
+Run `/bash-review recent` to check shell scripts for issues.
+
+If no `.sh` files exist in the project, skip this step and mark as SKIP in the report.
+
 ## Output Format
 
 Provide a consolidated validation report:
@@ -47,6 +52,10 @@ TEST ............ [PASS/FAIL]
 
 REVIEW .......... [PASS/FAIL]
   - X critical, Y warnings, Z suggestions
+
+BASH REVIEW ..... [PASS/FAIL/SKIP]
+  - X critical, Y warnings, Z suggestions
+  - (or "No shell scripts found")
 
 -------------------------------------
 OVERALL: [READY TO COMMIT / NEEDS WORK]

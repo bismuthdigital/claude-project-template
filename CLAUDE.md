@@ -79,6 +79,7 @@ This project includes Claude Code skills for development:
 | `/lint` | Run linters and formatters |
 | `/test` | Run tests with coverage |
 | `/review` | Code review for issues |
+| `/bash-review` | Review bash scripts for issues |
 | `/docs` | Review documentation and comments |
 | `/check` | Full validation pipeline |
 | `/init-from-template` | Create new project from template |

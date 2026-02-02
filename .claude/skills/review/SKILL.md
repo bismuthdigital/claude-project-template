@@ -54,6 +54,13 @@ You are a senior Python code reviewer. Your goal is to find issues and report th
 - Missing type hints
 - Complex logic without explanatory comments
 
+### 7. Shell Scripts
+For `.sh` files, this skill provides basic checks. For comprehensive shell script analysis, run `/bash-review` which includes:
+- Shellcheck integration (when available)
+- Security vulnerability detection
+- Portability concerns (GNU vs BSD)
+- Bash-specific best practices
+
 ## Process
 
 1. **Identify files to review**:
