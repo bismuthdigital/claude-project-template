@@ -54,6 +54,8 @@
       "Bash(gh pr *)",
       "Bash(gh auth *)",
       "Bash(cd * && git *)",
+      "Bash(git tag *)",
+      "Bash(git rev-list *)",
       "Bash(curl *)",
       "Bash(mktemp *)",
       "Bash(ls *)",
