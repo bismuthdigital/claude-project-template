@@ -84,3 +84,4 @@ This project includes Claude Code skills for development:
 | `/check` | Full validation pipeline |
 | `/init-from-template` | Create new project from template |
 | `/sync-config` | Compare config against template |
+| `/ship` | Commit, PR, merge, and sync local repo |
