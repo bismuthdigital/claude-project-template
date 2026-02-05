@@ -1,7 +1,7 @@
 ---
 name: check
 description: >
-  Runs full validation pipeline: lint, test, and review.
+  Runs full validation pipeline: lint, test, review, and docs.
   Use before committing to ensure code quality.
 argument-hint: "[path or empty for full project]"
 disable-model-invocation: true
@@ -9,7 +9,7 @@ disable-model-invocation: true
 
 # Full Project Validation
 
-Run complete code quality checks in sequence: linting, testing, and code review.
+Run complete code quality checks in sequence: linting, testing, code review, and documentation.
 
 ## Pipeline Steps
 
@@ -28,7 +28,12 @@ If tests fail, note the failures but continue to review.
 ### Step 3: Review
 Run `/review recent` to check for common issues in changed code.
 
-### Step 4: Bash Review
+### Step 4: Docs
+Run `/docs check` to verify documentation consistency.
+
+If doc issues are found, note them but continue.
+
+### Step 5: Bash Review
 Run `/bash-review recent` to check shell scripts for issues.
 
 If no `.sh` files exist in the project, skip this step and mark as SKIP in the report.
@@ -53,6 +58,9 @@ TEST ............ [PASS/FAIL]
 REVIEW .......... [PASS/FAIL]
   - X critical, Y warnings, Z suggestions
 
+DOCS ............ [PASS/FAIL]
+  - X errors, Y warnings
+
 BASH REVIEW ..... [PASS/FAIL/SKIP]
   - X critical, Y warnings, Z suggestions
   - (or "No shell scripts found")
@@ -69,5 +77,6 @@ List the specific issues that need attention:
 1. **[LINT]** file.py:42 - description
 2. **[TEST]** test_foo.py::test_bar - assertion failed
 3. **[REVIEW]** file.py:87 - potential bug
+4. **[DOCS]** README.md - command example outdated
 
 Provide a recommended order for addressing issues (critical first).

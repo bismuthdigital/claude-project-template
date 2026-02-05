@@ -85,3 +85,4 @@ This project includes Claude Code skills for development:
 | `/init-from-template` | Create new project from template |
 | `/sync-config` | Compare config against template |
 | `/ship` | Commit, PR, merge, and sync local repo |
+| `/version` | Bump version, create and push git tag |
