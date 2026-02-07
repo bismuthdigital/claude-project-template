@@ -11,30 +11,52 @@ disable-model-invocation: true
 
 Run complete code quality checks in sequence: linting, testing, code review, and documentation.
 
+## Smart Path Handling
+
+Before running pipeline steps:
+
+1. **Determine scope**:
+   - If path argument provided: Use it for all steps
+   - If no path: Default to "recent" for review/bash-review, full project for lint/test/docs
+
+2. **Estimate size**:
+   - Count Python files in target path
+   - If >50 files: Inform user that parallel batching will be used for review/docs
+   - If path is a single file: Skip batching optimization
+
+3. **Pass scope to each step**:
+   - Lint: Pass path argument (ruff handles large codebases efficiently)
+   - Test: Pass path argument (pytest handles selective testing well)
+   - Review: Pass path or "recent" - skill will auto-batch if needed
+   - Docs: Pass path - skill will auto-batch if needed
+   - Bash Review: Pass path or "recent" - handles shell scripts separately
+
 ## Pipeline Steps
 
 Execute these in order, stopping if critical failures occur:
 
 ### Step 1: Lint
-Run `/lint` to fix formatting and check for issues.
+Run `/lint [path]` to fix formatting and check for issues.
 
 If ruff/mypy report errors that cannot be auto-fixed, note them but continue.
 
 ### Step 2: Test
-Run `/test` to execute the test suite with coverage.
+Run `/test [path]` to execute the test suite with coverage.
 
 If tests fail, note the failures but continue to review.
 
 ### Step 3: Review
-Run `/review recent` to check for common issues in changed code.
+Run `/review [path or recent]` to check for common issues in changed code.
+
+The review skill will automatically batch large file sets using parallel agents.
 
 ### Step 4: Docs
-Run `/docs check` to verify documentation consistency.
+Run `/docs check [path]` to verify documentation consistency.
 
-If doc issues are found, note them but continue.
+The docs skill will automatically batch large file sets using parallel agents.
 
 ### Step 5: Bash Review
-Run `/bash-review recent` to check shell scripts for issues.
+Run `/bash-review [path or recent]` to check shell scripts for issues.
 
 If no `.sh` files exist in the project, skip this step and mark as SKIP in the report.
 
@@ -46,6 +68,9 @@ Provide a consolidated validation report:
 =====================================
         VALIDATION REPORT
 =====================================
+Scope: [path or "full project" or "recent changes"]
+Files analyzed: X Python, Y shell scripts, Z docs
+[Performance: Used parallel batching for review/docs]
 
 LINT ............ [PASS/FAIL]
   - X issues auto-fixed
@@ -57,9 +82,11 @@ TEST ............ [PASS/FAIL]
 
 REVIEW .......... [PASS/FAIL]
   - X critical, Y warnings, Z suggestions
+  - [Batched: N files across M parallel agents in Xs]
 
 DOCS ............ [PASS/FAIL]
   - X errors, Y warnings
+  - [Batched: N files across M parallel agents in Xs]
 
 BASH REVIEW ..... [PASS/FAIL/SKIP]
   - X critical, Y warnings, Z suggestions
