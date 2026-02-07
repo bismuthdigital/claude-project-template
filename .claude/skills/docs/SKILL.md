@@ -87,7 +87,21 @@ find src -name "*.py" -type f
 grep -E "^version\s*=" pyproject.toml
 ```
 
-### Phase 2: Analyze
+### Phase 2: Smart Batching
+
+Based on the number of files found:
+
+- **>30 Python files**: Use Task tool with parallel general-purpose agents
+  - Split Python files into batches of 15-20
+  - Each agent checks: docstrings, comment quality, complexity
+  - Documentation files always checked in main context (usually <10 files)
+  - Run agents in parallel for faster analysis
+
+- **15-30 Python files**: Sequential analysis with progress updates
+
+- **<15 files**: Normal analysis in current context
+
+### Phase 3: Analyze
 
 For each documentation file:
 1. Extract code blocks and command examples
@@ -95,21 +109,22 @@ For each documentation file:
 3. Check version references match pyproject.toml
 4. Compare feature lists against actual code
 
-For each Python file:
+For each Python file (or batch):
 1. Find public functions (not prefixed with `_`)
 2. Check for docstrings
 3. Find complex code blocks (>10 lines, nested logic)
 4. Check for explanatory comments
 
-### Phase 3: Report (check mode)
+### Phase 4: Report (check mode)
 
 Output findings in structured format showing:
 - Documentation gaps
 - Inconsistencies found
 - Stale or outdated content
 - Missing "why" explanations
+- If batched: Note performance improvement from parallel processing
 
-### Phase 4: Update (update mode)
+### Phase 5: Update (update mode)
 
 For each issue found:
 1. Show the problem

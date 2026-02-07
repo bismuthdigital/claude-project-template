@@ -68,11 +68,30 @@ For `.sh` files, this skill provides basic checks. For comprehensive shell scrip
    - If specific files given: use those
    - Filter to only `.py` files
 
-2. **Read and analyze each file** looking for issues in the focus areas
+2. **Smart batching for large file sets**:
+   - If >20 files to review: Use Task tool to spawn parallel general-purpose agents
+     - Split files into batches of 10-15 files each
+     - Each agent reviews its batch independently
+     - Run agents in parallel for faster completion
+   - If 10-20 files: Review sequentially but provide progress updates
+   - If <10 files: Review normally in current context
 
-3. **Report findings** using the format below
+3. **Read and analyze each file** (or coordinate agents to do so) looking for issues in the focus areas
+
+4. **Consolidate and report findings** using the format below
+   - If using parallel agents: Merge results from all batches
+   - Deduplicate similar issues across files
+   - Sort by severity (Critical → Warning → Suggestion)
 
 ## Output Format
+
+### Performance Note (if batched)
+```
+Reviewed [N] files using [M] parallel agents in [X]s
+Batch 1: 15 files analyzed
+Batch 2: 15 files analyzed
+Batch 3: 12 files analyzed
+```
 
 ### Review: [filename]
 
