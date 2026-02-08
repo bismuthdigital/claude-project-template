@@ -223,6 +223,8 @@ else
     echo "  /ship           - Commit, PR, merge, and sync"
     echo "  /version        - Bump version and create git tag"
     echo "  /cost-estimate  - Estimate API costs"
+    echo "  /model-alternatives - Find free model replacements"
+    echo "  /prompt-review  - Review AI prompts for quality"
     echo "  /sync-config    - Compare config against template"
     echo ""
 fi
