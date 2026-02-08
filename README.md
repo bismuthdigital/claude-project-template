@@ -105,6 +105,7 @@ your-project/
 │       ├── docs/              # /docs - Documentation review
 │       ├── init-from-template/ # /init-from-template
 │       ├── lint/              # /lint - Run linters
+│       ├── model-alternatives/ # /model-alternatives - Free model replacements
 │       ├── review/            # /review - Code review
 │       ├── ship/              # /ship - Commit/PR/merge workflow
 │       ├── sync-config/       # /sync-config
@@ -132,6 +133,7 @@ Once installed, these skills are available in Claude Code:
 | `/ship` | Commit, create PR, merge, and sync local repo |
 | `/version` | Bump semantic version, create and push git tag |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
+| `/model-alternatives` | Find free open-source replacements for paid API calls |
 | `/init-from-template` | Create a new project from this template |
 | `/sync-config` | Compare your config against latest template |
 
