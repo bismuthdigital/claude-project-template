@@ -106,6 +106,7 @@ your-project/
 │       ├── init-from-template/ # /init-from-template
 │       ├── lint/              # /lint - Run linters
 │       ├── model-alternatives/ # /model-alternatives - Free model replacements
+│       ├── prompt-review/     # /prompt-review - AI prompt quality review
 │       ├── review/            # /review - Code review
 │       ├── ship/              # /ship - Commit/PR/merge workflow
 │       ├── sync-config/       # /sync-config
@@ -134,6 +135,7 @@ Once installed, these skills are available in Claude Code:
 | `/version` | Bump semantic version, create and push git tag |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
+| `/prompt-review` | Review AI prompts for quality and suggest improvements |
 | `/init-from-template` | Create a new project from this template |
 | `/sync-config` | Compare your config against latest template |
 

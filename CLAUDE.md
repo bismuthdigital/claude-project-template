@@ -88,3 +88,4 @@ This project includes Claude Code skills for development:
 | `/version` | Bump version, create and push git tag |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
+| `/prompt-review` | Review AI prompts for quality and suggest improvements |
