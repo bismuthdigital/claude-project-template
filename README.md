@@ -7,7 +7,7 @@ A reusable Claude Code configuration template for Python projects. Provides sens
 - **No prompts for safe operations** - Edit Python files, run tests/linters, search docs without interruption
 - **Auto-linting** - Runs ruff after every file edit
 - **Code review reminders** - Suggests `/review` after implementation work
-- **Custom skills** - `/lint`, `/test`, `/review`, `/check`, `/docs`, `/sync-config` for common workflows
+- **Custom skills** - `/lint`, `/test`, `/review`, `/check`, `/docs`, `/ship`, `/version`, `/cost-estimate`, and more
 - **Python tooling** - Pre-configured ruff, pytest, coverage, and mypy
 
 ## Installation
@@ -97,14 +97,19 @@ your-project/
 │   ├── hooks/
 │   │   ├── lint-format.sh     # Auto-runs ruff after edits
 │   │   └── config-suggest.sh  # Suggests /sync-config
+│   ├── ship.json              # Ship workflow settings
 │   └── skills/
-│       ├── review/            # /review - Code review
-│       ├── lint/              # /lint - Run linters
-│       ├── test/              # /test - Run tests
+│       ├── bash-review/       # /bash-review - Shell script review
 │       ├── check/             # /check - Full validation
+│       ├── cost-estimate/     # /cost-estimate - API cost analysis
 │       ├── docs/              # /docs - Documentation review
 │       ├── init-from-template/ # /init-from-template
-│       └── sync-config/       # /sync-config
+│       ├── lint/              # /lint - Run linters
+│       ├── review/            # /review - Code review
+│       ├── ship/              # /ship - Commit/PR/merge workflow
+│       ├── sync-config/       # /sync-config
+│       ├── test/              # /test - Run tests
+│       └── version/           # /version - Semantic versioning
 ├── src/your_package/
 ├── tests/
 ├── pyproject.toml             # Python tooling config
@@ -121,8 +126,12 @@ Once installed, these skills are available in Claude Code:
 | `/lint` | Run ruff check, ruff format, and mypy |
 | `/test` | Run pytest with coverage reporting |
 | `/review` | Review code for bugs and common issues |
-| `/check` | Full validation: lint → test → review |
+| `/bash-review` | Review bash scripts for issues |
 | `/docs` | Review documentation and comments for consistency |
+| `/check` | Full validation: lint → test → review → docs |
+| `/ship` | Commit, create PR, merge, and sync local repo |
+| `/version` | Bump semantic version, create and push git tag |
+| `/cost-estimate` | Estimate API costs and suggest optimizations |
 | `/init-from-template` | Create a new project from this template |
 | `/sync-config` | Compare your config against latest template |
 

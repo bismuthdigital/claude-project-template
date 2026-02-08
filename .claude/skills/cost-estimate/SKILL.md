@@ -33,8 +33,7 @@ Use these rates for all calculations:
 Use these rules of thumb when estimating token counts:
 
 - **1 token ≈ 4 characters** of English text or code
-- **1 line of code ≈ 10-15 tokens** (average)
-- **1 Python file ≈ 30-60 tokens per line** including whitespace
+- **1 line of code ≈ 10-15 tokens** (average, including whitespace and syntax)
 - **System prompts**: Claude Code system prompt ≈ 5,000-10,000 tokens
 - **Tool definitions**: Each tool adds ~200-500 tokens to context
 - **SKILL.md files**: Measure directly — these are injected as prompts
