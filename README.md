@@ -7,7 +7,7 @@ A reusable Claude Code configuration template for Python projects. Provides sens
 - **No prompts for safe operations** - Edit Python files, run tests/linters, search docs without interruption
 - **Auto-linting** - Runs ruff after every file edit
 - **Code review reminders** - Suggests `/review` after implementation work
-- **Custom skills** - `/lint`, `/test`, `/review`, `/check`, `/docs`, `/ship`, `/version`, `/cost-estimate`, and more
+- **Custom skills** - `/lint`, `/test`, `/review`, `/check`, `/docs`, `/bash-review`, `/comic`, `/ship`, `/version`, `/cost-estimate`, `/sync-config` and more
 - **Python tooling** - Pre-configured ruff, pytest, coverage, and mypy
 
 ## Installation
@@ -99,16 +99,18 @@ your-project/
 │   │   └── config-suggest.sh  # Suggests /sync-config
 │   ├── ship.json              # Ship workflow settings
 │   └── skills/
-│       ├── bash-review/       # /bash-review - Shell script review
+│       ├── bash-review/       # /bash-review - Shell script analysis
 │       ├── check/             # /check - Full validation
+│       ├── comic/             # /comic - SVG explainer comics
 │       ├── cost-estimate/     # /cost-estimate - API cost analysis
 │       ├── docs/              # /docs - Documentation review
 │       ├── init-from-template/ # /init-from-template
+│       ├── init-project/      # /init-project - New project + GitHub repo
 │       ├── lint/              # /lint - Run linters
 │       ├── model-alternatives/ # /model-alternatives - Free model replacements
 │       ├── prompt-review/     # /prompt-review - AI prompt quality review
 │       ├── review/            # /review - Code review
-│       ├── ship/              # /ship - Commit/PR/merge workflow
+│       ├── ship/              # /ship - Commit, PR, merge workflow
 │       ├── sync-config/       # /sync-config
 │       ├── test/              # /test - Run tests
 │       └── version/           # /version - Semantic versioning
@@ -130,14 +132,16 @@ Once installed, these skills are available in Claude Code:
 | `/review` | Review code for bugs and common issues |
 | `/bash-review` | Review bash scripts for issues |
 | `/docs` | Review documentation and comments for consistency |
-| `/check` | Full validation: lint → test → review → docs |
-| `/ship` | Commit, create PR, merge, and sync local repo |
-| `/version` | Bump semantic version, create and push git tag |
+| `/check` | Full validation: lint → test → review → docs → bash-review |
+| `/comic` | Generate SVG explainer comics about the project |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
 | `/prompt-review` | Review AI prompts for quality and suggest improvements |
-| `/init-from-template` | Create a new project from this template |
+| `/init-from-template` | Create a new project from this template (local only) |
+| `/init-project` | Create a new project with GitHub repository |
 | `/sync-config` | Compare your config against latest template |
+| `/ship` | Commit, PR, merge, and sync local repo |
+| `/version` | Bump version, create and push git tag |
 
 ## Keeping Up to Date
 

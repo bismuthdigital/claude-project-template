@@ -16,7 +16,19 @@ Create a new Python project using the claude-project-template as a starting poin
 ## Arguments
 
 - `$1` (required): Project name (e.g., `my-awesome-project`)
-- `$2` (optional): Target directory (defaults to `./$1`)
+- `$2` (optional): Target directory (defaults to `~/code/claude/$1`)
+
+### Examples
+
+Default location (creates at `~/code/claude/my-project/`):
+```bash
+/init-from-template my-project
+```
+
+Custom location:
+```bash
+/init-from-template my-project /path/to/custom/location
+```
 
 ## Configuration
 
@@ -37,7 +49,7 @@ Defaults to `janewilkin/claude-project-template` on `main`.
 
 ```bash
 PROJECT_NAME="$1"
-TARGET_DIR="${2:-./$PROJECT_NAME}"
+TARGET_DIR="${2:-$HOME/code/claude/$PROJECT_NAME}"
 
 if [ -z "$PROJECT_NAME" ]; then
     echo "Error: Project name is required"

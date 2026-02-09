@@ -82,8 +82,10 @@ This project includes Claude Code skills for development:
 | `/bash-review` | Review bash scripts for issues |
 | `/docs` | Review documentation and comments |
 | `/check` | Full validation pipeline |
-| `/init-from-template` | Create new project from template |
+| `/init-from-template` | Create new project from template (local only) |
+| `/init-project` | Create new project with GitHub repository |
 | `/sync-config` | Compare config against template |
+| `/comic` | Generate SVG explainer comics about the project |
 | `/ship` | Commit, PR, merge, and sync local repo |
 | `/version` | Bump version, create and push git tag |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |

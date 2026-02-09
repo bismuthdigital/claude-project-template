@@ -61,6 +61,35 @@ For `.sh` files, this skill provides basic checks. For comprehensive shell scrip
 - Portability concerns (GNU vs BSD)
 - Bash-specific best practices
 
+### 8. Resiliency & Recovery
+Evaluate how code handles interruptions and partial failures:
+
+**Disk/filesystem failures:**
+- File writes without atomic patterns (write-to-temp + rename) — partial writes corrupt data on crash
+- Missing `fsync` / `flush` before rename when durability matters
+- No cleanup of temporary files on error (orphaned `.tmp`, `.partial`, `.lock` files)
+- Missing disk space checks before large writes
+
+**Network unavailability:**
+- HTTP/API calls without timeouts — hangs indefinitely if network drops
+- No retry logic with backoff for transient failures (connection reset, DNS timeout, 503)
+- Missing circuit breaker patterns for repeated downstream failures
+- TCP connections held open without keepalive or reconnect logic
+
+**Recoverability & auto-resume:**
+- Long operations (downloads, uploads, migrations) with no checkpoint/resume mechanism
+- Batch processing that restarts from zero after interruption instead of resuming
+- Missing idempotency — re-running after partial completion causes duplicates or errors
+- Database transactions spanning too much work (single large tx instead of chunked commits)
+- No write-ahead log or equivalent for multi-step operations that must be atomic
+
+**Partial / corrupted state cleanup:**
+- No validation of file integrity after write (checksum, size check, format parse)
+- Missing rollback on failure — half-applied changes left in place
+- Lock files not cleaned up on abnormal exit (missing `atexit`, signal handlers, or `try/finally`)
+- Cache files that become stale or corrupted with no invalidation or rebuild mechanism
+- No graceful degradation — single component failure brings down the entire operation
+
 ## Process
 
 1. **Identify files to review**:
