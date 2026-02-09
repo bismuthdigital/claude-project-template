@@ -1,0 +1,236 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+<defs>
+  <!-- FILTERS -->
+  <filter id="drop-shadow" x="-20%" y="-20%" width="140%" height="140%">
+    <feDropShadow dx="2" dy="3" stdDeviation="3" flood-color="#000000" flood-opacity="0.2"/>
+  </filter>
+  <filter id="soft-shadow" x="-20%" y="-20%" width="140%" height="140%">
+    <feDropShadow dx="1" dy="3" stdDeviation="5" flood-color="#E75480" flood-opacity="0.18"/>
+  </filter>
+  <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur"/>
+    <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+  </filter>
+  <filter id="card-shadow" x="-10%" y="-10%" width="130%" height="130%">
+    <feDropShadow dx="2" dy="4" stdDeviation="6" flood-color="#D4618C" flood-opacity="0.15"/>
+  </filter>
+
+  <!-- GRADIENTS -->
+  <linearGradient id="kawaii-title-grad" x1="0" y1="0" x2="1" y2="0">
+    <stop offset="0%" stop-color="#E8508B"/>
+    <stop offset="50%" stop-color="#F7A8C4"/>
+    <stop offset="100%" stop-color="#E8508B"/>
+  </linearGradient>
+  <linearGradient id="body-pink-grad" x1="0.3" y1="0" x2="0.7" y2="1">
+    <stop offset="0%" stop-color="#FFD1DC"/>
+    <stop offset="100%" stop-color="#FFB6C1"/>
+  </linearGradient>
+  <radialGradient id="bg-glow-1" cx="0.2" cy="0.3" r="0.5">
+    <stop offset="0%" stop-color="#FFDDE8" stop-opacity="0.7"/>
+    <stop offset="100%" stop-color="#FFF0F5" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="bg-glow-2" cx="0.8" cy="0.7" r="0.45">
+    <stop offset="0%" stop-color="#E8D5F0" stop-opacity="0.5"/>
+    <stop offset="100%" stop-color="#FFF0F5" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="panel-grad" cx="0.5" cy="0.3" r="0.7">
+    <stop offset="0%" stop-color="#FFFFFF"/>
+    <stop offset="100%" stop-color="#FFF5F8"/>
+  </radialGradient>
+  <linearGradient id="file-grad" x1="0" y1="0" x2="0.3" y2="1">
+    <stop offset="0%" stop-color="#FFFFFF"/>
+    <stop offset="100%" stop-color="#FFF0F3"/>
+  </linearGradient>
+  <linearGradient id="cmd-grad" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#FFFFFF"/>
+    <stop offset="100%" stop-color="#FDF5FF"/>
+  </linearGradient>
+
+  <!-- PINK CAT -->
+  <symbol id="pink-cat" viewBox="0 0 100 150">
+    <ellipse cx="50" cy="140" rx="22" ry="5" fill="#FF69B4" opacity="0.15"/>
+    <path d="M 28 45 L 22 15 L 38 35 Z" fill="url(#body-pink-grad)" stroke="#F48FB1" stroke-width="1"/>
+    <path d="M 29 44 L 25 20 L 37 37 Z" fill="#F48FB1" opacity="0.5"/>
+    <path d="M 72 45 L 78 15 L 62 35 Z" fill="url(#body-pink-grad)" stroke="#F48FB1" stroke-width="1"/>
+    <path d="M 71 44 L 75 20 L 63 37 Z" fill="#F48FB1" opacity="0.5"/>
+    <ellipse cx="50" cy="75" rx="32" ry="35" fill="url(#body-pink-grad)" stroke="#F48FB1" stroke-width="1"/>
+    <ellipse cx="50" cy="120" rx="18" ry="22" fill="url(#body-pink-grad)" stroke="#F48FB1" stroke-width="1"/>
+    <ellipse cx="36" cy="128" rx="10" ry="6" fill="url(#body-pink-grad)" stroke="#F48FB1" stroke-width="0.8"/>
+    <ellipse cx="64" cy="128" rx="10" ry="6" fill="url(#body-pink-grad)" stroke="#F48FB1" stroke-width="0.8"/>
+    <ellipse cx="38" cy="70" rx="6" ry="7" fill="#FFFFFF"/>
+    <ellipse cx="38" cy="70" rx="4" ry="5.5" fill="#2C3E50"/>
+    <ellipse cx="39.5" cy="68" rx="1.8" ry="2" fill="#FFFFFF"/>
+    <ellipse cx="62" cy="70" rx="6" ry="7" fill="#FFFFFF"/>
+    <ellipse cx="62" cy="70" rx="4" ry="5.5" fill="#2C3E50"/>
+    <ellipse cx="63.5" cy="68" rx="1.8" ry="2" fill="#FFFFFF"/>
+    <ellipse cx="50" cy="78" rx="2" ry="1.5" fill="#F48FB1"/>
+    <path d="M 43 83 Q 46 86 50 84 Q 54 86 57 83" stroke="#C94077" stroke-width="1.2" fill="none"/>
+    <ellipse cx="30" cy="80" rx="6" ry="4" fill="#F48FB1" opacity="0.35"/>
+    <ellipse cx="70" cy="80" rx="6" ry="4" fill="#F48FB1" opacity="0.35"/>
+    <circle cx="72" cy="38" r="5" fill="#E8508B"/>
+    <path d="M 66 34 L 72 38 L 66 42" fill="#E8508B"/>
+    <path d="M 78 34 L 72 38 L 78 42" fill="#E8508B"/>
+    <path d="M 82 80 Q 90 70 92 85 Q 88 95 82 90" stroke="#FFB6C1" stroke-width="2" fill="none"/>
+  </symbol>
+
+  <!-- 4-point sparkle -->
+  <symbol id="sparkle" viewBox="0 0 20 20">
+    <path d="M 10 0 Q 10.5 8 20 10 Q 10.5 12 10 20 Q 9.5 12 0 10 Q 9.5 8 10 0 Z" fill="#F7A8C4"/>
+  </symbol>
+
+  <!-- Small heart -->
+  <symbol id="heart" viewBox="0 0 20 20">
+    <path d="M 10 18 Q 0 10 2 5 Q 4 0 10 5 Q 16 0 18 5 Q 20 10 10 18 Z" fill="#E8508B" opacity="0.55"/>
+  </symbol>
+
+  <!-- Star decoration -->
+  <symbol id="star" viewBox="0 0 24 24">
+    <path d="M 12 0 L 14.5 8.5 L 24 9.5 L 17 15.5 L 19 24 L 12 19.5 L 5 24 L 7 15.5 L 0 9.5 L 9.5 8.5 Z" fill="#F7C6D6" opacity="0.4"/>
+  </symbol>
+
+</defs>
+
+  <!-- ============ BACKGROUND WITH DEPTH ============ -->
+  <!-- Base -->
+  <rect width="800" height="600" fill="#FFF0F5" rx="15"/>
+  <!-- Soft radial glows for depth -->
+  <rect width="800" height="600" fill="url(#bg-glow-1)" rx="15"/>
+  <rect width="800" height="600" fill="url(#bg-glow-2)" rx="15"/>
+
+  <!-- Background floating soft circles (behind everything) -->
+  <circle cx="680" cy="480" r="80" fill="#F8E0EC" opacity="0.35"/>
+  <circle cx="100" cy="500" r="55" fill="#EDE0F5" opacity="0.3"/>
+  <circle cx="720" cy="120" r="45" fill="#F8E0EC" opacity="0.25"/>
+  <circle cx="60" cy="150" r="35" fill="#EDE0F5" opacity="0.2"/>
+
+  <!-- Background large faint stars -->
+  <use href="#star" x="690" y="440" width="50" height="50"/>
+  <use href="#star" x="55" y="460" width="35" height="35"/>
+  <use href="#star" x="710" y="85" width="30" height="30"/>
+
+  <!-- ============ TITLE BAR ============ -->
+  <rect width="800" height="60" fill="url(#kawaii-title-grad)" rx="15"/>
+  <rect x="0" y="30" width="800" height="30" fill="url(#kawaii-title-grad)"/>
+  <!-- Title highlight line -->
+  <line x1="250" y1="8" x2="550" y2="8" stroke="#FFFFFF" stroke-width="1" opacity="0.25" stroke-linecap="round"/>
+  <text x="400" y="42" text-anchor="middle" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="26" fill="#FFFFFF" font-weight="bold">How Skills Work</text>
+  <!-- Title decorative hearts -->
+  <use href="#heart" x="248" y="18" width="18" height="18"/>
+  <use href="#heart" x="534" y="18" width="18" height="18"/>
+
+  <!-- ============ MAIN PANEL ============ -->
+  <rect x="20" y="70" width="760" height="470" fill="url(#panel-grad)" stroke="#F48FB1" stroke-width="2" rx="18" stroke-dasharray="10 5" filter="url(#card-shadow)"/>
+
+  <!-- Inner panel soft edge glow -->
+  <rect x="25" y="75" width="750" height="460" rx="15" fill="none" stroke="#FFD6E5" stroke-width="3" opacity="0.4"/>
+
+  <!-- ============ PINK CAT CHARACTER ============ -->
+  <use href="#pink-cat" x="35" y="150" width="170" height="255" filter="url(#soft-shadow)"/>
+
+  <!-- ============ SPEECH BUBBLE (cloud) ============ -->
+  <g transform="translate(235, 82)">
+    <!-- Outer cloud (dashed stroke) -->
+    <ellipse cx="240" cy="32" rx="242" ry="38" fill="#FFF5F8" stroke="#F48FB1" stroke-width="2" stroke-dasharray="7 4"/>
+    <!-- Inner cloud fill layers for soft depth -->
+    <ellipse cx="240" cy="30" rx="230" ry="32" fill="#FFEFF5"/>
+    <ellipse cx="140" cy="28" rx="90" ry="30" fill="#FFEFF5"/>
+    <ellipse cx="340" cy="28" rx="90" ry="30" fill="#FFEFF5"/>
+    <ellipse cx="240" cy="22" rx="190" ry="26" fill="#FFF5F8"/>
+    <!-- Heart pointer toward cat -->
+    <g transform="translate(-22, 22)">
+      <path d="M 12 18 Q 1 11 3 5 Q 6 -1 12 5 Q 18 -1 21 5 Q 23 11 12 18 Z" fill="#E8508B" opacity="0.6"/>
+    </g>
+    <!-- Bubble text -->
+    <text x="240" y="40" text-anchor="middle" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="16" fill="#C94077" font-weight="bold">Type a slash command and I know exactly what to do!</text>
+    <!-- Tiny sparkle inside bubble -->
+    <use href="#sparkle" x="455" y="10" width="13" height="13"/>
+  </g>
+
+  <!-- ============ SKILL.MD FILE ILLUSTRATION ============ -->
+  <g transform="translate(310, 200) rotate(-2)" filter="url(#card-shadow)">
+    <!-- File body with gradient -->
+    <rect x="0" y="0" width="130" height="165" rx="12" fill="url(#file-grad)" stroke="#F48FB1" stroke-width="1.5"/>
+    <!-- Folded corner -->
+    <path d="M 100 0 L 130 30 L 100 30 Z" fill="#FFDDE8" stroke="#F48FB1" stroke-width="1"/>
+    <!-- Corner fold inner shadow -->
+    <path d="M 102 2 L 128 28 L 102 28 Z" fill="#FFD0E0" opacity="0.5"/>
+    <!-- File header band -->
+    <rect x="10" y="38" width="110" height="24" rx="6" fill="#FFDDE8"/>
+    <text x="65" y="56" text-anchor="middle" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="14" fill="#C94077" font-weight="bold">SKILL.md</text>
+    <!-- Content lines with varied colors for visual interest -->
+    <rect x="15" y="72" width="75" height="7" rx="3.5" fill="#F48FB1" opacity="0.3"/>
+    <rect x="15" y="86" width="100" height="7" rx="3.5" fill="#C9A6DE" opacity="0.35"/>
+    <rect x="15" y="100" width="60" height="7" rx="3.5" fill="#F48FB1" opacity="0.3"/>
+    <rect x="15" y="114" width="88" height="7" rx="3.5" fill="#8ECFA8" opacity="0.35"/>
+    <rect x="15" y="128" width="72" height="7" rx="3.5" fill="#C9A6DE" opacity="0.35"/>
+    <rect x="15" y="142" width="50" height="7" rx="3.5" fill="#F48FB1" opacity="0.3"/>
+    <!-- Cute face on the file -->
+    <circle cx="42" cy="18" r="2.5" fill="#C94077"/>
+    <circle cx="58" cy="18" r="2.5" fill="#C94077"/>
+    <path d="M 45 24 Q 50 28 55 24" stroke="#C94077" stroke-width="1" fill="none"/>
+  </g>
+
+  <!-- ============ CURVY ARROW FROM FILE TO COMMANDS ============ -->
+  <g>
+    <path d="M 448 290 Q 470 270 490 285" stroke="#E8508B" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-dasharray="6 3"/>
+    <polygon points="488,279 495,285 488,291" fill="#E8508B"/>
+    <!-- Small sparkle on the arrow -->
+    <use href="#sparkle" x="458" y="268" width="11" height="11"/>
+  </g>
+
+  <!-- ============ SLASH COMMAND LIST ============ -->
+  <g transform="translate(500, 218)" filter="url(#card-shadow)">
+    <rect x="0" y="0" width="248" height="195" rx="14" fill="url(#cmd-grad)" stroke="#D4A5E0" stroke-width="1.5"/>
+    <!-- Header -->
+    <rect x="8" y="8" width="232" height="28" rx="8" fill="#F8E8FD"/>
+    <text x="124" y="28" text-anchor="middle" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="13" fill="#9C5BBF" font-weight="bold">slash commands</text>
+
+    <!-- Command rows with alternating subtle backgrounds -->
+    <rect x="10" y="44" width="228" height="26" rx="6" fill="#FFF5F8" opacity="0.6"/>
+    <rect x="10" y="96" width="228" height="26" rx="6" fill="#FFF5F8" opacity="0.6"/>
+    <rect x="10" y="148" width="228" height="26" rx="6" fill="#FFF5F8" opacity="0.6"/>
+
+    <text x="20" y="62" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="14" fill="#E8508B" font-weight="bold">/lint</text>
+    <text x="88" y="62" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="13" fill="#A888B5">clean up code</text>
+
+    <text x="20" y="88" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="14" fill="#E8508B" font-weight="bold">/test</text>
+    <text x="88" y="88" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="13" fill="#A888B5">run all tests</text>
+
+    <text x="20" y="114" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="14" fill="#E8508B" font-weight="bold">/review</text>
+    <text x="104" y="114" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="13" fill="#A888B5">find bugs</text>
+
+    <text x="20" y="140" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="14" fill="#E8508B" font-weight="bold">/ship</text>
+    <text x="88" y="140" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="13" fill="#A888B5">deploy it all</text>
+
+    <text x="20" y="167" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="14" fill="#E8508B" font-weight="bold">/comic</text>
+    <text x="100" y="167" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="13" fill="#A888B5">draw this!</text>
+
+    <text x="124" y="190" text-anchor="middle" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="13" fill="#C9A6DE" font-style="italic">...and 7 more!</text>
+  </g>
+
+  <!-- ============ DECORATIONS ============ -->
+  <!-- Large sparkles in corners -->
+  <use href="#sparkle" x="28" y="76" width="22" height="22" filter="url(#glow)"/>
+  <use href="#sparkle" x="748" y="76" width="20" height="20"/>
+  <use href="#sparkle" x="28" y="516" width="18" height="18"/>
+  <use href="#sparkle" x="748" y="514" width="22" height="22" filter="url(#glow)"/>
+
+  <!-- Medium sparkles scattered -->
+  <use href="#sparkle" x="215" y="420" width="15" height="15"/>
+  <use href="#sparkle" x="280" y="480" width="12" height="12"/>
+  <use href="#sparkle" x="600" y="440" width="14" height="14"/>
+
+  <!-- Hearts scattered -->
+  <use href="#heart" x="195" y="175" width="18" height="18"/>
+  <use href="#heart" x="740" y="250" width="15" height="15"/>
+  <use href="#heart" x="225" y="350" width="13" height="13"/>
+  <use href="#heart" x="480" y="445" width="16" height="16"/>
+
+  <!-- Floating small stars -->
+  <use href="#star" x="160" y="440" width="22" height="22"/>
+  <use href="#star" x="620" y="470" width="18" height="18"/>
+
+  <!-- ============ CAPTION ============ -->
+  <text x="400" y="562" text-anchor="middle" font-family="'Comic Sans MS', 'Chalkboard SE', cursive" font-size="15" fill="#C94077">Skills are reusable workflows -- just SKILL.md files in .claude/skills/</text>
+
+</svg>

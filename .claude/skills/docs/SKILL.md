@@ -27,6 +27,7 @@ Check these common documentation files:
 |------|----------------|
 | `README.md` | Installation steps work, features list matches code, examples are correct |
 | `CLAUDE.md` | Project context is accurate, commands work, architecture matches reality |
+| `QUICKSTART.md` | If present, entry points are accurate, commands work, paths exist, output is terminal-friendly |
 | `USAGE.md` | If present, usage examples are correct |
 | `CONTRIBUTING.md` | If present, contribution guidelines are current |
 | `CHANGELOG.md` | If present, recent changes are documented |
@@ -72,6 +73,71 @@ Verify documentation matches reality:
 - Skill descriptions match their actual behavior
 - Installation instructions produce working setup
 
+### 5. QUICKSTART.md
+
+QUICKSTART.md is a terminal-friendly orientation file. It is designed for humans who `cat QUICKSTART.md` to quickly understand where to start in a project. It is NOT a replacement for README.md — it is a minimal, scannable quick-reference.
+
+**What it should contain:**
+- Project purpose in 1-2 sentences
+- How to install/set up (exact commands, copy-pasteable)
+- Key entry points: where the main code lives, where to start reading
+- Most common commands (build, test, run)
+- Important file locations (config files, main modules, test directory)
+
+**Format constraints (terminal-optimized):**
+- No HTML tags, collapsible sections, or images
+- No tables wider than 80 characters
+- No deeply nested lists (2 levels maximum)
+- Minimal use of bold/italic — prefer plain text and code blocks
+- Short lines: aim for under 80 characters
+- Total length: ideally under 60 lines so it fits in a single terminal screen
+- Section headers should use `##` for clear visual separation when displayed raw
+
+**Bad QUICKSTART.md** (too verbose, not scannable):
+```
+This project is a comprehensive framework for building distributed
+microservices with event-driven architectures. It supports multiple
+deployment targets including Kubernetes, Docker Swarm, and bare metal...
+
+## Table of Contents
+1. [Introduction](#introduction)
+2. [Philosophy](#philosophy)
+...
+```
+
+**Good QUICKSTART.md** (concise, actionable):
+```
+## What
+
+Brief project description in one line.
+
+## Setup
+
+python -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+
+## Key Paths
+
+src/package_name/       Main source code
+src/package_name/cli.py CLI entry point
+tests/                  Test suite
+pyproject.toml          Project config
+
+## Common Commands
+
+pytest                  Run tests
+ruff check --fix .      Lint
+ruff format .           Format
+```
+
+**What to verify:**
+- Commands listed in QUICKSTART.md actually work
+- File paths referenced actually exist in the repository
+- Setup instructions are consistent with README.md and CLAUDE.md
+- Content is not stale (no references to removed files or old package names)
+- Format stays within terminal-friendly constraints (no wide tables, no HTML)
+- Length is reasonable (flag if over 80 lines)
+
 ## Process
 
 ### Phase 1: Scan
@@ -79,6 +145,9 @@ Verify documentation matches reality:
 ```bash
 # Find documentation files
 find . -maxdepth 2 -name "*.md" -type f
+
+# Check for QUICKSTART.md specifically (terminal-friendly orientation file)
+test -f QUICKSTART.md && echo "QUICKSTART.md found"
 
 # Find Python files with public APIs
 find src -name "*.py" -type f
@@ -143,6 +212,7 @@ DOCUMENTATION FILES
 ───────────────────────────────────────────────────
 ✓ README.md - Complete and accurate
 ⚠ CLAUDE.md:15 - References outdated directory structure
+✓ QUICKSTART.md - Concise, commands verified, paths valid
 ✗ No CONTRIBUTING.md found (optional)
 
 CODE COMMENTS
