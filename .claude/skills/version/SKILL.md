@@ -40,6 +40,15 @@ This skill updates version in two locations:
 
 ### Step 1: Pre-flight Checks
 
+Detect if running in a worktree:
+
+```bash
+# Detect worktree vs main repo
+git rev-parse --git-dir
+```
+
+If `--git-dir` output contains `/worktrees/`, you are in a worktree. This affects push behavior (Step 8).
+
 Verify the repository state:
 
 ```bash
@@ -48,7 +57,9 @@ git status --porcelain
 ```
 
 If there are uncommitted changes, warn the user:
-> "You have uncommitted changes. Commit or stash them before versioning."
+> "You have uncommitted changes. Commit them before versioning."
+
+**Worktree safety:** Never suggest `git stash` — in worktrees, the stash is shared across all worktrees. A stash created here could be accidentally popped in another worktree, losing changes. Always recommend committing (even a WIP commit) instead.
 
 ```bash
 # Get current version from pyproject.toml
@@ -128,7 +139,7 @@ git add pyproject.toml src/your_package/__init__.py
 git commit -m "$(cat <<'EOF'
 Bump version to X.Y.Z
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -204,7 +215,7 @@ Push tag to origin? [Y/n]
 
 | Error | Resolution |
 |-------|------------|
-| Uncommitted changes | Ask user to commit or stash first |
+| Uncommitted changes | Ask user to commit first (never suggest stash in worktrees) |
 | Version file not found | List expected paths, check project structure |
 | Tag already exists | Suggest incrementing further or using `--force` |
 | Push fails | Show error, provide manual push command |
@@ -218,6 +229,14 @@ Push tag to origin? [Y/n]
 | **MAJOR** (X.0.0) | Breaking changes, incompatible API changes |
 | **MINOR** (0.X.0) | New features, backward-compatible additions |
 | **PATCH** (0.0.X) | Bug fixes, documentation, minor improvements |
+
+## Worktree Safety
+
+This skill is safe to run in git worktrees. Key considerations:
+
+- **Never use `git stash`** — stashes are shared across all worktrees and can be lost
+- **Tags are global** — a tag created in a worktree is visible in the main repo and all worktrees
+- **Push the commit** — in a worktree, the version bump commit must be pushed explicitly (`git push origin HEAD`) since the main repo won't see it otherwise
 
 ## Notes
 

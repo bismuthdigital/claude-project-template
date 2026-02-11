@@ -321,3 +321,4 @@ rm -rf "$TEMPLATE_DIR"
 - Preserve any custom configurations that aren't in template
 - For private repos, at least one auth method must be available (see Strategy 1-4)
 - The `template.json` config lets teams point at their own fork or branch
+- **Worktree safe:** Template is cloned into a temp directory (`mktemp -d`), not into the project tree, so it never interferes with worktree or main repo state

@@ -50,7 +50,7 @@ Before starting, verify:
 git rev-parse --git-dir
 ```
 
-If the current directory IS the main worktree, warn the user:
+If the `--git-dir` output contains `/worktrees/`, you are in a worktree (expected). If it ends with just `.git`, you're in the main repository — warn the user:
 > "You're already in the main repository. This skill is designed for worktree → main workflows. Continue anyway?"
 
 ```bash
@@ -59,6 +59,8 @@ git status --porcelain
 ```
 
 If no changes exist, inform the user and exit.
+
+**Worktree safety:** If the user has uncommitted changes they want to set aside temporarily, never suggest `git stash` — stashes are shared across all worktrees and can be accidentally popped in the wrong worktree. Recommend committing as a WIP commit instead.
 
 ### Step 2: Determine Local Path
 
@@ -99,7 +101,7 @@ git add -A
 git commit -m "$(cat <<'EOF'
 <commit message here>
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -232,6 +234,15 @@ SYNC LOCAL
 | Merge conflicts | Abort and instruct user to resolve |
 | Local path invalid | Prompt user to configure `.claude/ship.json` |
 | Local pull fails | Show error, suggest manual intervention |
+
+## Worktree Safety
+
+This skill is designed for git worktree workflows. Key safety considerations:
+
+- **Never use `git stash`** — stashes are shared across all worktrees and can be lost if popped in the wrong one
+- **Branch deletion is remote-only** — the `--delete-branch` flag on merge only deletes the remote branch; the local worktree branch remains intact until the worktree itself is removed
+- **Local sync is isolated** — syncing the main repo (`cd "<localPath>" && git pull`) does not affect this worktree's state
+- **Worktree cleanup** — after shipping, the worktree can be removed with `git worktree remove <path>` from the main repo
 
 ## Notes
 
