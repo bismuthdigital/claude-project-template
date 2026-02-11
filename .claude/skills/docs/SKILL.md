@@ -27,7 +27,7 @@ Check these common documentation files:
 |------|----------------|
 | `README.md` | Installation steps work, features list matches code, examples are correct |
 | `CLAUDE.md` | Project context is accurate, commands work, architecture matches reality |
-| `QUICKSTART.md` | If present, entry points are accurate, commands work, paths exist, output is terminal-friendly |
+| `QUICKSTART.md` | **REQUIRED** - Entry points are accurate, commands work, paths exist, output is terminal-friendly |
 | `USAGE.md` | If present, usage examples are correct |
 | `CONTRIBUTING.md` | If present, contribution guidelines are current |
 | `CHANGELOG.md` | If present, recent changes are documented |
@@ -146,8 +146,8 @@ ruff format .           Format
 # Find documentation files
 find . -maxdepth 2 -name "*.md" -type f
 
-# Check for QUICKSTART.md specifically (terminal-friendly orientation file)
-test -f QUICKSTART.md && echo "QUICKSTART.md found"
+# Check for QUICKSTART.md specifically (REQUIRED - terminal-friendly orientation file)
+test -f QUICKSTART.md && echo "QUICKSTART.md found" || echo "QUICKSTART.md MISSING (required)"
 
 # Find Python files with public APIs
 find src -name "*.py" -type f
@@ -155,6 +155,8 @@ find src -name "*.py" -type f
 # Get current version
 grep -E "^version\s*=" pyproject.toml
 ```
+
+**IMPORTANT**: If QUICKSTART.md is missing, this is a critical issue that should be flagged immediately and offered to be created.
 
 ### Phase 2: Smart Batching
 
@@ -171,6 +173,11 @@ Based on the number of files found:
 - **<15 files**: Normal analysis in current context
 
 ### Phase 3: Analyze
+
+**First priority - Check for QUICKSTART.md:**
+- If QUICKSTART.md is missing, this is a critical issue
+- In **check** mode: Flag as error and offer to create it
+- In **update** mode: Automatically offer to create a default version
 
 For each documentation file:
 1. Extract code blocks and command examples
@@ -195,7 +202,18 @@ Output findings in structured format showing:
 
 ### Phase 5: Update (update mode)
 
-For each issue found:
+**Special handling for missing QUICKSTART.md:**
+1. Generate a default QUICKSTART.md by:
+   - Reading pyproject.toml for project name and description
+   - Reading README.md for installation steps
+   - Finding main entry points in src/
+   - Extracting common commands from README or CLAUDE.md
+   - Identifying key file paths (config, tests, main modules)
+2. Present the generated content to the user
+3. Ask for confirmation before creating the file
+4. Create QUICKSTART.md with the approved content
+
+For each other issue found:
 1. Show the problem
 2. Propose a fix
 3. Ask for confirmation before applying
@@ -214,6 +232,11 @@ DOCUMENTATION FILES
 ⚠ CLAUDE.md:15 - References outdated directory structure
 ✓ QUICKSTART.md - Concise, commands verified, paths valid
 ✗ No CONTRIBUTING.md found (optional)
+
+[If QUICKSTART.md is missing, show:]
+✗ QUICKSTART.md - MISSING (REQUIRED)
+  → This file is required for terminal-friendly quick reference
+  → Offer to create a default QUICKSTART.md based on project structure
 
 CODE COMMENTS
 ───────────────────────────────────────────────────
@@ -247,9 +270,11 @@ Overall: NEEDS ATTENTION (1 error, 4 warnings)
 ## After Review
 
 In **check** mode:
-> "Say **update** to fix these issues, or **fix [N]** to address a specific item."
+> If QUICKSTART.md is missing: "Say **create quickstart** to generate QUICKSTART.md, or **update** to fix all issues."
+> Otherwise: "Say **update** to fix these issues, or **fix [N]** to address a specific item."
 
 In **update** mode:
+> If QUICKSTART.md is missing: Proactively offer to create it first before addressing other issues.
 > Show each proposed change and ask for confirmation before applying.
 
 ## Examples
