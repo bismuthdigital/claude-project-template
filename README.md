@@ -108,6 +108,7 @@ your-project/
 │       ├── init-project/      # /init-project - New project + GitHub repo
 │       ├── lint/              # /lint - Run linters
 │       ├── model-alternatives/ # /model-alternatives - Free model replacements
+│       ├── next-steps/        # /next-steps - Roadmap review and planning
 │       ├── prompt-review/     # /prompt-review - AI prompt quality review
 │       ├── review/            # /review - Code review
 │       ├── ship/              # /ship - Commit, PR, merge workflow
@@ -140,6 +141,7 @@ Once installed, these skills are available in Claude Code:
 | `/init-from-template` | Create a new project from this template (local only) |
 | `/init-project` | Create a new project with GitHub repository |
 | `/sync-config` | Compare your config against latest template |
+| `/next-steps` | Review roadmap, reconcile with recent work, suggest next step |
 | `/ship` | Commit, PR, merge, and sync local repo |
 | `/version` | Bump version, create and push git tag |
 

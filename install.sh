@@ -220,6 +220,7 @@ else
     echo "  /bash-review    - Review bash scripts for issues"
     echo "  /docs           - Review documentation and comments"
     echo "  /check          - Full validation pipeline"
+    echo "  /next-steps     - Review roadmap and suggest next step"
     echo "  /ship           - Commit, PR, merge, and sync"
     echo "  /version        - Bump version and create git tag"
     echo "  /cost-estimate  - Estimate API costs"

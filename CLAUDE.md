@@ -86,6 +86,7 @@ This project includes Claude Code skills for development:
 | `/init-project` | Create new project with GitHub repository |
 | `/sync-config` | Compare config against template |
 | `/comic` | Generate SVG explainer comics about the project |
+| `/next-steps` | Review roadmap, reconcile with recent work, suggest next step |
 | `/ship` | Commit, PR, merge, and sync local repo |
 | `/version` | Bump version, create and push git tag |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
