@@ -164,7 +164,7 @@ git commit -m "Initial commit from claude-project-template
 Project: $PROJECT_NAME
 Package: $PACKAGE_NAME
 
-Co-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>" >/dev/null 2>&1
+Co-Authored-By: Claude <noreply@anthropic.com>" >/dev/null 2>&1
 echo "✓ Created initial commit"
 ```
 
