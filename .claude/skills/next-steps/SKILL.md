@@ -1,5 +1,6 @@
 ---
 name: next-steps
+version: 1.0.0
 description: >
   Identifies and maintains project next steps. Reviews existing NEXT-STEPS.md,
   consolidates scattered TODOs, analyzes code and commits for opportunities,
@@ -172,6 +173,7 @@ Guidelines for writing items:
 ### When an existing file is found
 
 ```
+/next-steps v1.0.0
 ═══════════════════════════════════════════════════
             NEXT STEPS REVIEW
 ═══════════════════════════════════════════════════
@@ -212,6 +214,7 @@ to do a full re-analysis.
 ### When no file exists (new analysis)
 
 ```
+/next-steps v1.0.0
 ═══════════════════════════════════════════════════
             NEXT STEPS ANALYSIS
 ═══════════════════════════════════════════════════

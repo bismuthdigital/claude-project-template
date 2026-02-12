@@ -18,11 +18,10 @@ fi
 # Change to project directory
 cd "$CLAUDE_PROJECT_DIR" || exit 0
 
-# Activate virtual environment if it exists
-if [[ -f ".venv/bin/activate" ]]; then
-    # shellcheck disable=SC1091
-    source .venv/bin/activate 2>/dev/null || true
-fi
+# Activate virtual environment (supports venv, poetry, conda, uv, pipenv, pyenv)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/venv-activate.sh" 2>/dev/null || true
 
 # Track if we made changes
 CHANGES_MADE=false

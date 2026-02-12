@@ -1,5 +1,6 @@
 ---
 name: comic
+version: 1.0.0
 description: >
   Generates SVG explainer comics about the project for non-technical audiences.
   Supports technical reference and kawaii pastel pink themes, single or 4-panel layouts.
@@ -712,6 +713,7 @@ Save to `docs/comics/{slug}-{theme}-{N}p.svg`:
 
 Report:
 ```
+/comic v1.0.0
 ═══════════════════════════════════════════════════
               COMIC GENERATED
 ═══════════════════════════════════════════════════

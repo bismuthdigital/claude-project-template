@@ -1,5 +1,6 @@
 ---
 name: bash-review
+version: 1.0.0
 description: >
   Reviews bash scripts for common pitfalls, security issues, and best practices.
   Uses shellcheck when available, with manual analysis fallback.
@@ -84,6 +85,7 @@ You are a senior shell script reviewer. Your goal is to find issues and report t
 ## Output Format
 
 ```
+/bash-review v1.0.0
 ═══════════════════════════════════════════════════
          BASH SCRIPT REVIEW
 ═══════════════════════════════════════════════════

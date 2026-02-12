@@ -1,5 +1,6 @@
 ---
 name: sync-config
+version: 1.0.0
 description: >
   Compare this project's Claude configuration against the official template.
   Identifies missing features, outdated patterns, and suggests specific updates.
@@ -209,6 +210,15 @@ For each configuration area, identify:
 - Updated skill instructions
 - Deprecated skill patterns
 
+**Skill Versions:**
+- Parse the `version:` field from the YAML frontmatter of each local and template SKILL.md
+- Compare using semantic versioning rules (major.minor.patch)
+- Classify each skill as:
+  - **UP_TO_DATE**: Local version matches template version
+  - **UPDATE_AVAILABLE**: Template version is newer than local
+  - **LOCAL_NEWER**: Local version is newer than template (local customization)
+  - **MISSING_VERSION**: No `version:` field in local SKILL.md frontmatter
+
 **Python Tooling (`pyproject.toml`):**
 - New ruff rules enabled
 - Updated tool versions
@@ -219,6 +229,7 @@ For each configuration area, identify:
 Output a structured comparison report:
 
 ```
+/sync-config v1.0.0
 ═══════════════════════════════════════════════════
        CONFIGURATION SYNC REPORT
 ═══════════════════════════════════════════════════
@@ -254,13 +265,20 @@ HOOKS (.claude/hooks/)
 SKILLS (.claude/skills/)
 ───────────────────────────────────────────────────
 
-✓ Present: review, lint, test, check
+✓ Present: review (v1.0.0), lint (v1.0.0), test (v1.0.0), check (v1.0.0)
 ⚠ New skills available:
-  + init-from-template - Create projects from template
-  + sync-config - This skill (meta!)
+  + init-from-template v1.0.0 - Create projects from template
+  + sync-config v1.0.0 - This skill (meta!)
 
 ⚠ Updated skills:
   ~ review/SKILL.md - New review focus areas added
+
+⚠ Version mismatches:
+  ~ review/SKILL.md: local v1.0.0 → template v1.1.0 (update available)
+  ~ lint/SKILL.md: local v1.1.0 → template v1.0.0 (local is newer)
+
+✗ Missing version field:
+  ~ custom-skill/SKILL.md — no version in frontmatter
 
 ───────────────────────────────────────────────────
 PYTHON TOOLING (pyproject.toml)
@@ -279,8 +297,8 @@ SUMMARY
 Total differences: X
   - Permissions: Y new, Z security improvements
   - Hooks: A new
-  - Skills: B new, C updated
-  - Tooling: D new rules
+  - Skills: B new, C updated, D version mismatches
+  - Tooling: E new rules
 
 Recommendation: [UP TO DATE / MINOR UPDATES / SIGNIFICANT UPDATES]
 ```
@@ -297,6 +315,7 @@ Would you like me to apply any of these updates?
 [3] Update hooks (review changes first)
 [4] Add new skills (copy from template)
 [5] Update pyproject.toml ruff rules (may require fixes)
+[6] Update skill versions (align with template versions)
 
 Say "apply [N]" or "apply all" to make changes.
 Say "show [N]" to see the full diff for that section.

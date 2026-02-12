@@ -1,5 +1,6 @@
 ---
 name: lint
+version: 1.0.0
 description: >
   Runs Python linters and formatters (ruff, black, mypy) on the codebase.
   Use to check and fix code style issues.
@@ -25,13 +26,19 @@ Run all Python quality tools on the specified path or entire project.
 4. Run mypy for type checking
 5. Report results
 
+**First**, print the version banner:
+```
+/lint v1.0.0
+```
+Then run the commands below.
+
 ## Commands
 
 Run these in order:
 
 ```bash
-# Activate venv if it exists
-source .venv/bin/activate 2>/dev/null || true
+# Activate virtual environment (supports venv, poetry, conda, uv, pipenv, pyenv)
+source .claude/hooks/venv-activate.sh 2>/dev/null || true
 
 # Get target path (argument or current directory)
 TARGET="${ARGUMENTS:-.}"

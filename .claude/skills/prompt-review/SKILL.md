@@ -1,5 +1,6 @@
 ---
 name: prompt-review
+version: 1.0.0
 description: >
   Reviews all AI prompts in the application source code and suggests
   improvements for accuracy, quality, and cost-efficiency. Excludes
@@ -379,6 +380,7 @@ After reviewing all prompts individually, identify patterns across the codebase:
 ## Output Format
 
 ```
+/prompt-review v1.0.0
 ═══════════════════════════════════════════════════
           PROMPT REVIEW REPORT
 ═══════════════════════════════════════════════════

@@ -1,5 +1,6 @@
 ---
 name: docs
+version: 1.0.0
 description: >
   Reviews documentation and comments for consistency and correctness.
   Checks README, CLAUDE.md, docstrings, and code comments.
@@ -222,6 +223,7 @@ For each other issue found:
 ## Output Format
 
 ```
+/docs v1.0.0
 ═══════════════════════════════════════════════════
          DOCUMENTATION REVIEW
 ═══════════════════════════════════════════════════

@@ -1,5 +1,6 @@
 ---
 name: check
+version: 1.0.0
 description: >
   Runs full validation pipeline: lint, test, review, and docs.
   Use before committing to ensure code quality.
@@ -65,6 +66,7 @@ If no `.sh` files exist in the project, skip this step and mark as SKIP in the r
 Provide a consolidated validation report:
 
 ```
+/check v1.0.0
 =====================================
         VALIDATION REPORT
 =====================================
