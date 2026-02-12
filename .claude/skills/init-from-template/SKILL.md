@@ -1,5 +1,6 @@
 ---
 name: init-from-template
+version: 1.0.0
 description: >
   Initialize a new Python project from the claude-project-template.
   Clones the template, customizes package names, and sets up the project structure.
@@ -176,6 +177,8 @@ git commit -m "Initial commit from claude-project-template"
 After creating the project, output:
 
 ```
+/init-from-template v1.0.0
+
 ✓ Project '$PROJECT_NAME' created at $TARGET_DIR
   (template: ${TEMPLATE_REPO} via ${CLONE_METHOD})
 

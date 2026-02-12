@@ -1,5 +1,6 @@
 ---
 name: test
+version: 1.0.0
 description: >
   Runs the test suite with pytest and coverage reporting.
   Use to verify code changes and check test coverage.
@@ -18,11 +19,17 @@ Run pytest with coverage on the specified tests or entire test suite.
 3. Report results and coverage summary
 4. Highlight any failures or low coverage areas
 
+**First**, print the version banner:
+```
+/test v1.0.0
+```
+Then run the commands below.
+
 ## Commands
 
 ```bash
-# Activate venv if it exists
-source .venv/bin/activate 2>/dev/null || true
+# Activate virtual environment (supports venv, poetry, conda, uv, pipenv, pyenv)
+source .claude/hooks/venv-activate.sh 2>/dev/null || true
 
 # Run tests with coverage
 # If arguments provided, pass them through

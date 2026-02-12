@@ -1,5 +1,6 @@
 ---
 name: cost-estimate
+version: 1.0.0
 description: >
   Estimates Anthropic API costs for operations in this repo.
   Analyzes execution paths, model usage, and suggests optimizations
@@ -59,6 +60,15 @@ Based on the argument provided:
 - **A file or directory path**: Analyze that specific code for API call patterns (Section 1)
 
 ## Analysis Sections
+
+### Preliminary: Activate Virtual Environment
+
+Before running any Python commands, activate the project's virtual environment:
+
+```bash
+# Activate virtual environment (supports venv, poetry, conda, uv, pipenv, pyenv)
+source .claude/hooks/venv-activate.sh 2>/dev/null || true
+```
 
 ### Section 1: Direct API Usage in Source Code
 
@@ -253,6 +263,7 @@ Suggest restructuring units of work to reduce total API costs:
 ## Output Format
 
 ```
+/cost-estimate v1.0.0
 ═══════════════════════════════════════════════════
             COST ESTIMATION REPORT
 ═══════════════════════════════════════════════════

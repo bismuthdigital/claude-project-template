@@ -1,5 +1,6 @@
 ---
 name: model-alternatives
+version: 1.0.0
 description: >
   Finds paid AI API calls in the codebase and recommends free open-source
   replacements. Generates a project-specific eval suite to grade free models
@@ -70,6 +71,15 @@ Scan the codebase for paid AI API calls, recommend free open-source replacements
 | **Google AI Studio** | Yes | Gemma 2 | Generous free tier |
 
 ## Analysis Process
+
+### Preliminary: Activate Virtual Environment
+
+Before running any Python commands, activate the project's virtual environment:
+
+```bash
+# Activate virtual environment (supports venv, poetry, conda, uv, pipenv, pyenv)
+source .claude/hooks/venv-activate.sh 2>/dev/null || true
+```
 
 ### Section 1: Discover Paid API Calls
 
@@ -700,6 +710,7 @@ PERSISTENCE: src/classifier.py:42
 ## Output Format
 
 ```
+/model-alternatives v1.0.0
 ═══════════════════════════════════════════════════
       MODEL ALTERNATIVES REPORT
 ═══════════════════════════════════════════════════

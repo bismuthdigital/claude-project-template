@@ -1,5 +1,6 @@
 ---
 name: review
+version: 1.0.0
 description: >
   Reviews code for bugs, oversights, and common Python errors.
   Use after implementing changes to catch issues before committing.
@@ -90,6 +91,33 @@ Evaluate how code handles interruptions and partial failures:
 - Cache files that become stale or corrupted with no invalidation or rebuild mechanism
 - No graceful degradation — single component failure brings down the entire operation
 
+### 9. Virtual Environment Hygiene
+
+Check for Python invocation patterns that bypass the shared venv wrapper:
+
+**Direct Python invocations without wrapper (WARNING):**
+- `python script.py`, `python3 script.py`, `python -c "..."` in shell scripts or SKILL.md command blocks without first sourcing `venv-activate.sh`
+- `pip install`, `pip3 install` without activating the venv first
+- Any `Bash(python ...)` in skill definitions that don't first source `venv-activate.sh`
+
+**Hardcoded venv activation patterns (SUGGESTION):**
+- `source .venv/bin/activate` in non-wrapper scripts
+- `source venv/bin/activate` in non-wrapper scripts
+- `. .venv/bin/activate` (dot-source variant)
+- `. venv/bin/activate` (dot-source variant)
+- Any hardcoded venv path in scripts other than `.claude/hooks/venv-activate.sh`
+
+**Exceptions (do NOT flag):**
+- `.claude/hooks/venv-activate.sh` itself (the shared wrapper)
+- Documentation files (README.md, QUICKSTART.md, CLAUDE.md) showing setup instructions for users
+- `pyproject.toml` or other configuration files
+- Comments explaining the pattern
+
+For each violation found:
+- **SUGGESTION** severity for hardcoded venv activation patterns
+- **WARNING** severity for direct Python invocations in skills/scripts that should use the wrapper
+- **Fix**: Source `.claude/hooks/venv-activate.sh` instead of hardcoding venv activation, or ensure venv is activated before invoking Python
+
 ## Process
 
 1. **Identify files to review**:
@@ -121,6 +149,8 @@ Batch 1: 15 files analyzed
 Batch 2: 15 files analyzed
 Batch 3: 12 files analyzed
 ```
+
+/review v1.0.0
 
 ### Review: [filename]
 

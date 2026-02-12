@@ -1,5 +1,6 @@
 ---
 name: ship
+version: 1.0.0
 description: >
   Commits changes, creates a PR, merges it, and syncs the local repo.
   Complete workflow from worktree changes to running code in one command.
@@ -181,6 +182,7 @@ git fetch --prune
 ## Output Format
 
 ```
+/ship v1.0.0
 ═══════════════════════════════════════════════════
               SHIPPING CHANGES
 ═══════════════════════════════════════════════════
