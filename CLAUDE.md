@@ -92,3 +92,4 @@ This project includes Claude Code skills for development:
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
 | `/prompt-review` | Review AI prompts for quality and suggest improvements |
 | `/next-steps` | Identify, consolidate, and maintain project next steps |
+| `/aws-manifest` | Generate AWS infrastructure manifest for bismuth-aws-org |
