@@ -1,11 +1,12 @@
 ---
 name: ship
-version: 1.0.0
+version: 1.1.0
 description: >
-  Commits changes, creates a PR, merges it, and syncs the local repo.
-  Complete workflow from worktree changes to running code in one command.
+  Commits changes, bumps the version, creates a PR, merges it, and syncs
+  the local repo. Complete workflow from worktree changes to running code
+  in one command.
 argument-hint: "[commit message or empty for auto-generated]"
-allowed-tools: Read, Glob, Grep, Bash(git *), Bash(gh *), Bash(cd * && git *)
+allowed-tools: Read, Glob, Grep, Edit, Bash(git *), Bash(gh *), Bash(cd * && git *), Skill
 ---
 
 # Ship Changes to Main
@@ -15,10 +16,11 @@ Complete workflow to ship changes from a worktree to the main branch and sync th
 ## What This Skill Does
 
 1. **Commit** - Stage and commit all changes with a descriptive message
-2. **Push** - Push the branch to GitHub
-3. **Create PR** - Open a pull request with summary and test plan
-4. **Merge** - Squash merge the PR into main
-5. **Sync Local** - Fetch and pull changes in the local (non-worktree) directory
+2. **Version** - Bump the semantic version by invoking the `/version` skill
+3. **Push** - Push the branch to GitHub
+4. **Create PR** - Open a pull request with summary and test plan
+5. **Merge** - Squash merge the PR into main
+6. **Sync Local** - Fetch and pull changes in the local (non-worktree) directory
 
 ## Configuration
 
@@ -107,14 +109,39 @@ EOF
 )"
 ```
 
-### Step 4: Push to Remote
+### Step 4: Bump Version
+
+After committing changes, invoke the `/version` skill to bump the semantic version. The version skill will:
+1. Analyze the commits since the last tag to determine the increment level (major/minor/patch)
+2. Update version files (`pyproject.toml` and `src/your_package/__init__.py`)
+3. Commit the version bump
+4. Create an annotated git tag
+
+Invoke the skill:
+
+```
+/version
+```
+
+The version skill will ask the user for confirmation before applying the bump. If the user declines, continue with the ship process without a version bump.
+
+**Important:** Do NOT let the version skill push the tag or commit — the ship skill handles all pushing in the next step. When the version skill asks whether to push the tag, decline and proceed to Step 5.
+
+### Step 5: Push to Remote
 
 ```bash
 # Push branch, setting upstream if needed
 git push -u origin HEAD
 ```
 
-### Step 5: Create Pull Request
+If a version tag was created in Step 4, also push the tag:
+
+```bash
+# Push the version tag
+git push origin <tag>
+```
+
+### Step 6: Create Pull Request
 
 ```bash
 # Check if PR already exists for this branch
@@ -138,7 +165,7 @@ EOF
 
 If PR already exists, update it if there are new commits.
 
-### Step 6: Merge the PR
+### Step 7: Merge the PR
 
 Wait briefly for any CI checks to start, then:
 
@@ -155,7 +182,7 @@ If checks are failing, ask user whether to:
 - Merge anyway (if allowed)
 - Abort and fix issues
 
-### Step 7: Sync Local Repository
+### Step 8: Sync Local Repository
 
 Navigate to the local path and pull changes:
 
@@ -170,7 +197,7 @@ Verify the sync succeeded:
 cd "<localPath>" && git log -1 --oneline
 ```
 
-### Step 8: Cleanup (Optional)
+### Step 9: Cleanup (Optional)
 
 If the worktree branch was deleted remotely, offer to clean up locally:
 
@@ -182,7 +209,7 @@ git fetch --prune
 ## Output Format
 
 ```
-/ship v1.0.0
+/ship v1.1.0
 ═══════════════════════════════════════════════════
               SHIPPING CHANGES
 ═══════════════════════════════════════════════════
@@ -196,9 +223,20 @@ COMMIT
 ✓ Committed: "Add /ship skill for streamlined deployment"
 
 ───────────────────────────────────────────────────
+VERSION
+───────────────────────────────────────────────────
+✓ Analyzed commits → MINOR increment
+✓ Bumped version: 0.1.0 → 0.2.0
+✓ Updated pyproject.toml
+✓ Updated src/your_package/__init__.py
+✓ Committed: "Bump version to 0.2.0"
+✓ Created tag: v0.2.0
+
+───────────────────────────────────────────────────
 PUSH
 ───────────────────────────────────────────────────
 ✓ Pushed to origin/inspiring-antonelli
+✓ Pushed tag v0.2.0
 
 ───────────────────────────────────────────────────
 PULL REQUEST
@@ -230,6 +268,7 @@ SYNC LOCAL
 | Error | Resolution |
 |-------|------------|
 | No changes to commit | Exit early with message |
+| Version bump fails | Show error, ask user whether to continue shipping without a version bump |
 | Push rejected | Pull and retry, or ask user |
 | PR creation fails | Show error, offer to open manually |
 | CI checks failing | Ask user: wait, merge anyway, or abort |
