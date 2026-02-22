@@ -8,11 +8,23 @@
 
 ```
 src/
-└── your_package/       # Main package source code
+└── your_package/          # Main package source code
     └── __init__.py
 
-tests/                  # Test files
-└── conftest.py         # Shared pytest fixtures
+tests/                     # Test files
+└── conftest.py            # Shared pytest fixtures
+
+scripts/                   # Utility scripts
+├── work-queue.sh          # Task claiming for concurrent agents
+└── sync-all-projects.sh   # Sync config across all repos
+
+.claude/
+├── settings.json          # Permissions and hooks
+├── ship.json              # Ship workflow settings
+├── hooks/                 # Auto-linting, venv activation
+└── skills/                # 19 skill definitions
+
+install.sh                 # Template installer
 ```
 
 ## Development Setup
@@ -88,6 +100,8 @@ This project includes Claude Code skills for development:
 | `/comic` | Generate SVG explainer comics about the project |
 | `/ship` | Commit, PR, merge, and sync local repo |
 | `/version` | Bump version, create and push git tag |
+| `/claim-tasks` | Claim tasks from NEXT-STEPS.md for parallel worktree agents |
+| `/release-tasks` | Release claimed tasks back to the work queue |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
 | `/prompt-review` | Review AI prompts for quality and suggest improvements |

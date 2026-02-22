@@ -1,12 +1,11 @@
 ---
 name: ship
-version: 1.1.0
+version: 1.2.0
 description: >
-  Commits changes, bumps the version, creates a PR, merges it, and syncs
-  the local repo. Complete workflow from worktree changes to running code
-  in one command.
+  Commits changes, creates a PR, merges it, and syncs the local repo.
+  Complete workflow from worktree changes to running code in one command.
 argument-hint: "[commit message or empty for auto-generated]"
-allowed-tools: Read, Glob, Grep, Edit, Bash(git *), Bash(gh *), Bash(cd * && git *), Skill
+allowed-tools: Read, Glob, Grep, Edit, Bash(git *), Bash(gh *), Bash(cd * && git *), Bash(*/work-queue.sh *), Bash(source *), Bash(ruff *), Bash(mypy *), Skill
 ---
 
 # Ship Changes to Main
@@ -53,8 +52,8 @@ Before starting, verify:
 git rev-parse --git-dir
 ```
 
-If the `--git-dir` output contains `/worktrees/`, you are in a worktree (expected). If it ends with just `.git`, you're in the main repository — warn the user:
-> "You're already in the main repository. This skill is designed for worktree → main workflows. Continue anyway?"
+If the `--git-dir` output contains `/worktrees/`, you are in a worktree — this is the normal case when using `/claim-tasks` followed by `/ship`. If it ends with just `.git`, you're in the main repository — ask the user:
+> "You're in the main repository, not a worktree. This typically means changes weren't made through /claim-tasks. Would you like to commit directly to main instead?"
 
 ```bash
 # Check for uncommitted changes
@@ -83,14 +82,55 @@ git worktree list --porcelain | grep -m1 "^worktree " | cut -d' ' -f2
 
 Verify the path exists and is a git repository before proceeding.
 
-### Step 3: Commit Changes
+### Step 3: Detect Docs-Only Changes
+
+Before running CI checks, determine whether the changeset is docs-only. Stage the files first so we can inspect what will be committed:
+
+```bash
+git add -A
+git diff --cached --name-only
+```
+
+A commit is **docs-only** if every changed file matches one of these patterns:
+- `*.md` (Markdown files)
+- `*.txt` (text files, but NOT `requirements*.txt`)
+- `*.toml` (config files, but NOT `pyproject.toml`)
+- `docs/**` (documentation directory)
+- `.claude/**` (Claude config/skills)
+- `LICENSE*`, `NOTICE*`, `.gitignore`, `.github/CODEOWNERS`
+
+If **any** file falls outside these patterns (e.g. `.py`, `.yml`, `pyproject.toml`, `requirements*.txt`), the commit is **not** docs-only and requires full CI.
+
+### Step 3a: CI Parity Checks (code changes only)
+
+**Skip this step entirely for docs-only commits.**
+
+Run the same lint and type checks that CI runs. This prevents shipping code that will fail the PR checks.
+
+```bash
+# Activate venv
+source .venv/bin/activate 2>/dev/null || true
+
+# Auto-fix first
+ruff check --fix .
+ruff format .
+
+# Then verify CI checks pass
+ruff format --check .
+ruff check .
+mypy src/
+```
+
+If any check fails, **stop and fix the issues before continuing**. Do not skip this step — CI will catch the same errors and block the merge.
+
+### Step 4: Commit Changes
 
 Generate or use provided commit message:
 
 ```bash
 # Show what will be committed
 git status
-git diff --stat
+git diff --cached --stat
 ```
 
 If no commit message argument provided, generate one by:
@@ -98,9 +138,18 @@ If no commit message argument provided, generate one by:
 2. Writing a concise commit message (1-2 sentences)
 3. Including Co-Authored-By line
 
+**For docs-only commits**, append `[skip ci]` to the commit message (on the first line, after the message text). This tells GitHub Actions to skip all workflows for this push, saving CI minutes on changes that cannot break the build.
+
 ```bash
-# Stage and commit
-git add -A
+# Docs-only commit (with [skip ci])
+git commit -m "$(cat <<'EOF'
+<commit message here> [skip ci]
+
+Co-Authored-By: Claude <noreply@anthropic.com>
+EOF
+)"
+
+# Code commit (without [skip ci])
 git commit -m "$(cat <<'EOF'
 <commit message here>
 
@@ -109,7 +158,7 @@ EOF
 )"
 ```
 
-### Step 4: Bump Version
+### Step 5: Bump Version
 
 After committing changes, invoke the `/version` skill to bump the semantic version. The version skill will:
 1. Analyze the commits since the last tag to determine the increment level (major/minor/patch)
@@ -125,23 +174,23 @@ Invoke the skill:
 
 The version skill will ask the user for confirmation before applying the bump. If the user declines, continue with the ship process without a version bump.
 
-**Important:** Do NOT let the version skill push the tag or commit — the ship skill handles all pushing in the next step. When the version skill asks whether to push the tag, decline and proceed to Step 5.
+**Important:** Do NOT let the version skill push the tag or commit — the ship skill handles all pushing in the next step. When the version skill asks whether to push the tag, decline and proceed to Step 6.
 
-### Step 5: Push to Remote
+### Step 6: Push to Remote
 
 ```bash
 # Push branch, setting upstream if needed
 git push -u origin HEAD
 ```
 
-If a version tag was created in Step 4, also push the tag:
+If a version tag was created in Step 5, also push the tag:
 
 ```bash
 # Push the version tag
 git push origin <tag>
 ```
 
-### Step 6: Create Pull Request
+### Step 7: Create Pull Request
 
 ```bash
 # Check if PR already exists for this branch
@@ -165,13 +214,19 @@ EOF
 
 If PR already exists, update it if there are new commits.
 
-### Step 7: Merge the PR
+### Step 8: Merge the PR
 
-Wait briefly for any CI checks to start, then:
+**For docs-only commits** (commit message contains `[skip ci]`): merge immediately with `--admin` since no CI checks will run.
+
+```bash
+gh pr merge --squash --delete-branch --admin
+```
+
+**For code commits**: wait for CI checks to complete, then merge.
 
 ```bash
 # Check PR status
-gh pr checks
+gh pr checks --watch --fail-fast
 
 # Merge using configured method (default: squash)
 gh pr merge --squash --delete-branch
@@ -179,10 +234,10 @@ gh pr merge --squash --delete-branch
 
 If checks are failing, ask user whether to:
 - Wait for checks to complete
-- Merge anyway (if allowed)
+- Merge anyway (with `--admin`)
 - Abort and fix issues
 
-### Step 8: Sync Local Repository
+### Step 9: Sync Local Repository
 
 Navigate to the local path and pull changes:
 
@@ -197,19 +252,35 @@ Verify the sync succeeded:
 cd "<localPath>" && git log -1 --oneline
 ```
 
-### Step 9: Cleanup (Optional)
+### Step 10: Release Work Queue Claims
 
-If the worktree branch was deleted remotely, offer to clean up locally:
+If the work queue has claims for this worktree, release them after shipping:
+
+```bash
+# Release all claims held by this worktree
+scripts/work-queue.sh release-all
+```
+
+This frees the tasks for other agents. If the script is not found or the queue directory doesn't exist, skip silently — the work queue is optional.
+
+### Step 11: Cleanup
+
+If the worktree branch was deleted remotely, clean up locally:
 
 ```bash
 # Prune deleted remote branches
 git fetch --prune
 ```
 
+Since worktrees are automatically created by `/claim-tasks`, offer to remove the worktree after a successful merge:
+
+> "Changes merged to main. Remove this worktree? The session will end. [Y/n]"
+
+If the user accepts (or presses Enter), remove the worktree. If the user declines, the worktree remains for further work.
+
 ## Output Format
 
 ```
-/ship v1.1.0
 ═══════════════════════════════════════════════════
               SHIPPING CHANGES
 ═══════════════════════════════════════════════════
@@ -217,9 +288,17 @@ git fetch --prune
 Branch: inspiring-antonelli → main
 
 ───────────────────────────────────────────────────
+CI PARITY
+───────────────────────────────────────────────────
+✓ ruff format clean                    # or: ⊘ Skipped (docs-only)
+✓ ruff check clean                     # or: ⊘ Skipped (docs-only)
+✓ mypy clean                           # or: ⊘ Skipped (docs-only)
+
+───────────────────────────────────────────────────
 COMMIT
 ───────────────────────────────────────────────────
 ✓ Staged 5 files
+✓ Docs-only detected — added [skip ci]  # only if docs-only
 ✓ Committed: "Add /ship skill for streamlined deployment"
 
 ───────────────────────────────────────────────────
@@ -247,8 +326,8 @@ PULL REQUEST
 ───────────────────────────────────────────────────
 MERGE
 ───────────────────────────────────────────────────
-✓ CI checks passed
-✓ Squash merged into main
+✓ CI checks passed                      # or: ⊘ CI skipped (docs-only)
+✓ Squash merged into main               # uses --admin when docs-only
 ✓ Branch deleted
 
 ───────────────────────────────────────────────────
@@ -259,7 +338,7 @@ SYNC LOCAL
 ✓ Local repo now at: abc1234 Add /ship skill...
 
 ═══════════════════════════════════════════════════
-                  SHIPPED! 🚀
+                  SHIPPED!
 ═══════════════════════════════════════════════════
 ```
 
@@ -287,7 +366,8 @@ This skill is designed for git worktree workflows. Key safety considerations:
 
 ## Notes
 
-- This skill assumes you're working in a git worktree
+- This skill is designed for the `/claim-tasks` → develop → `/ship` workflow
+- Worktrees are automatically created by `/claim-tasks`; this skill ships from them
 - The PR is squash-merged by default to keep history clean
 - The worktree branch is deleted on remote after merge
 - Local sync only pulls; it won't auto-resolve conflicts

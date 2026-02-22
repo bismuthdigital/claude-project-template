@@ -96,11 +96,14 @@ your-project/
 │   ├── settings.json          # Permissions and hooks
 │   ├── hooks/
 │   │   ├── lint-format.sh     # Auto-runs ruff after edits
-│   │   └── config-suggest.sh  # Suggests /sync-config
+│   │   ├── config-suggest.sh  # Suggests /sync-config
+│   │   └── venv-activate.sh   # Shared venv activation (6 strategies)
 │   ├── ship.json              # Ship workflow settings
 │   └── skills/
+│       ├── aws-manifest/      # /aws-manifest - AWS infra declaration
 │       ├── bash-review/       # /bash-review - Shell script analysis
 │       ├── check/             # /check - Full validation
+│       ├── claim-tasks/       # /claim-tasks - Claim work + auto-worktree
 │       ├── comic/             # /comic - SVG explainer comics
 │       ├── cost-estimate/     # /cost-estimate - API cost analysis
 │       ├── docs/              # /docs - Documentation review
@@ -108,16 +111,23 @@ your-project/
 │       ├── init-project/      # /init-project - New project + GitHub repo
 │       ├── lint/              # /lint - Run linters
 │       ├── model-alternatives/ # /model-alternatives - Free model replacements
+│       ├── next-steps/        # /next-steps - Project roadmap management
 │       ├── prompt-review/     # /prompt-review - AI prompt quality review
+│       ├── release-tasks/     # /release-tasks - Release claimed tasks
 │       ├── review/            # /review - Code review
 │       ├── ship/              # /ship - Commit, PR, merge workflow
 │       ├── sync-config/       # /sync-config
 │       ├── test/              # /test - Run tests
 │       └── version/           # /version - Semantic versioning
+├── scripts/
+│   ├── work-queue.sh          # Task claiming for concurrent agents
+│   └── sync-all-projects.sh   # Sync config across all repos
 ├── src/your_package/
 ├── tests/
+├── install.sh                 # Template installer
 ├── pyproject.toml             # Python tooling config
 ├── CLAUDE.md                  # Project context for Claude
+├── QUICKSTART.md              # Terminal-friendly quick reference
 └── .gitignore
 ```
 
@@ -137,11 +147,15 @@ Once installed, these skills are available in Claude Code:
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
 | `/prompt-review` | Review AI prompts for quality and suggest improvements |
+| `/next-steps` | Identify and maintain project roadmap |
+| `/claim-tasks` | Claim tasks from NEXT-STEPS.md with auto-worktree |
+| `/release-tasks` | Release claimed tasks back to the work queue |
 | `/init-from-template` | Create a new project from this template (local only) |
 | `/init-project` | Create a new project with GitHub repository |
 | `/sync-config` | Compare your config against latest template |
 | `/ship` | Commit, PR, merge, and sync local repo |
 | `/version` | Bump version, create and push git tag |
+| `/aws-manifest` | Generate AWS infrastructure manifest |
 
 ## Keeping Up to Date
 
@@ -181,6 +195,7 @@ The template allows these operations without prompting:
 | Hook | Trigger | Action |
 |------|---------|--------|
 | `lint-format.sh` | After Edit/Write on `.py` | Runs ruff check --fix and ruff format |
+| `venv-activate.sh` | Sourced by other hooks | Activates venv (supports venv, poetry, conda, uv, pipenv, pyenv) |
 | `config-suggest.sh` | After Edit on `.claude/` | Suggests running /sync-config |
 | Stop hook | End of response | Suggests /review after implementation work |
 
