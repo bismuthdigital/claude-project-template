@@ -16,6 +16,7 @@
 #   work-queue.sh init                                         # Ensure queue directory exists
 #   work-queue.sh inflight-tasks                               # List tasks completed in open PRs (JSON)
 #   work-queue.sh max-claimed-version                          # Show highest speculated version across all claims
+#   work-queue.sh validate                                     # Health check: detect claim issues
 
 set -euo pipefail
 
@@ -24,12 +25,50 @@ set -euo pipefail
 # Find the main repo root (first line of worktree list is always the main repo)
 MAIN_REPO=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
 
-# Determine which worktree we're in
-CURRENT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-if [[ "$CURRENT_DIR" == "$MAIN_REPO" ]]; then
-    WORKTREE_NAME="main"
-else
-    WORKTREE_NAME=$(basename "$CURRENT_DIR")
+# Determine which worktree we're in (layered detection)
+_detect_worktree() {
+    # 1. Explicit env var (highest priority — set by caller)
+    if [[ -n "${WORK_QUEUE_WORKTREE:-}" ]]; then
+        echo "$WORK_QUEUE_WORKTREE"
+        return
+    fi
+
+    # 2. Check script's own resolved path for .claude/worktrees/<name>/
+    local script_path
+    script_path=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+    if [[ "$script_path" =~ \.claude/worktrees/([^/]+)/ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return
+    fi
+
+    # 3. Check git's internal worktree directory for /worktrees/<name> suffix
+    local git_dir
+    git_dir=$(git rev-parse --git-dir 2>/dev/null || true)
+    if [[ "$git_dir" =~ /worktrees/([^/]+)$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return
+    fi
+
+    # 4. CWD-based detection (legacy fallback)
+    local current_dir
+    current_dir=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+    if [[ "$current_dir" == "$MAIN_REPO" ]]; then
+        echo "main"
+    else
+        basename "$current_dir"
+    fi
+}
+
+WORKTREE_NAME=$(_detect_worktree)
+
+# Warn if detected as "main" but context suggests otherwise
+if [[ "$WORKTREE_NAME" == "main" ]]; then
+    _script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+    if [[ "$_script_dir" =~ \.claude/worktrees/ ]]; then
+        echo "WARNING: Worktree detected as 'main' but script is running from a worktree path." >&2
+        echo "Set WORK_QUEUE_WORKTREE=<name> to override." >&2
+    fi
+    unset _script_dir
 fi
 
 # Queue directory lives in the main repo (shared across all worktrees)
@@ -77,6 +116,24 @@ slug_from_title() {
     echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | head -c 80
 }
 
+_find_claim_by_title() {
+    # Search all existing claim files for a matching task_title.
+    # Returns the slug (filename without .json) if found, empty string otherwise.
+    local target_title="$1"
+    mkdir -p "$CLAIMS_DIR"
+    for claim_file in "$CLAIMS_DIR"/*.json; do
+        [[ -f "$claim_file" ]] || continue
+        local title
+        title=$(python3 -c "import json; print(json.load(open('$claim_file')).get('task_title', ''))" 2>/dev/null) || continue
+        if [[ "$title" == "$target_title" ]]; then
+            basename "$claim_file" .json
+            return 0
+        fi
+    done
+    echo ""
+    return 0
+}
+
 # --- Commands ---
 
 cmd_init() {
@@ -101,6 +158,29 @@ cmd_claim() {
     local version="${5:-}"
 
     mkdir -p "$CLAIMS_DIR"
+
+    # --- Safeguard: canonical slug enforcement ---
+    # If a title was provided, compute the canonical slug and correct if needed
+    if [[ -n "$title" && "$title" != "$slug" ]]; then
+        local canonical
+        canonical=$(slug_from_title "$title")
+        if [[ "$canonical" != "$slug" ]]; then
+            echo "SLUG_CORRECTED:${slug}:${canonical}" >&2
+            slug="$canonical"
+        fi
+    fi
+
+    # --- Safeguard: duplicate title detection ---
+    # Check if this exact title is already claimed under a different slug
+    local existing_slug
+    existing_slug=$(_find_claim_by_title "$title")
+    if [[ -n "$existing_slug" && "$existing_slug" != "$slug" ]]; then
+        local existing_owner
+        existing_owner=$(python3 -c "import json; print(json.load(open('${CLAIMS_DIR}/${existing_slug}.json'))['agent_worktree'])" 2>/dev/null)
+        echo "DUPLICATE_TITLE:${existing_slug}:${existing_owner}" >&2
+        echo "DUPLICATE_TITLE"
+        return 1
+    fi
 
     local claim_file="${CLAIMS_DIR}/${slug}.json"
 
@@ -370,6 +450,119 @@ print(json.dumps(unique, indent=2))
 " <<< "$all_titles"
 }
 
+cmd_validate() {
+    mkdir -p "$CLAIMS_DIR"
+    local ttl
+    ttl=$(get_ttl)
+
+    # Collect all worktrees for orphan detection
+    local worktree_names
+    worktree_names=$(git worktree list --porcelain | grep '^worktree ' | while read -r _ wt_path; do
+        if [[ "$wt_path" == "$MAIN_REPO" ]]; then
+            echo "main"
+        else
+            basename "$wt_path"
+        fi
+    done)
+
+    python3 -c "
+import json, os, re, sys, time
+
+claims_dir = '${CLAIMS_DIR}'
+ttl = ${ttl}
+worktree_names = set('''${worktree_names}'''.strip().split('\n'))
+
+def slug_from_title(title):
+    \"\"\"Match the bash slug_from_title exactly: lowercase, replace non-alnum
+    with hyphens, collapse runs, strip ONE leading and ONE trailing hyphen,
+    truncate to 80 bytes.\"\"\"
+    s = re.sub(r'[^a-z0-9]', '-', title.lower())
+    s = re.sub(r'-+', '-', s)
+    if s.startswith('-'):
+        s = s[1:]
+    if s.endswith('-'):
+        s = s[:-1]
+    return s[:80]
+
+issues = []
+claims_by_title = {}  # title -> [(slug, owner)]
+claims_by_slug = {}   # slug -> claim data
+
+for fname in sorted(os.listdir(claims_dir)):
+    if not fname.endswith('.json'):
+        continue
+    slug = fname[:-5]
+    fpath = os.path.join(claims_dir, fname)
+    try:
+        with open(fpath) as f:
+            claim = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        issues.append({'type': 'invalid_json', 'file': fname, 'error': str(e)})
+        continue
+
+    claims_by_slug[slug] = claim
+    title = claim.get('task_title', '')
+    owner = claim.get('agent_worktree', '')
+
+    # Check slug/title mismatch
+    canonical = slug_from_title(title)
+    if canonical and slug != canonical:
+        issues.append({
+            'type': 'slug_mismatch',
+            'file': fname,
+            'current_slug': slug,
+            'canonical_slug': canonical,
+            'title': title
+        })
+
+    # Track titles for duplicate detection
+    if title:
+        claims_by_title.setdefault(title, []).append((slug, owner))
+
+    # Check orphaned worktrees
+    if owner and owner not in worktree_names:
+        issues.append({
+            'type': 'orphaned_worktree',
+            'file': fname,
+            'owner': owner,
+            'title': title
+        })
+
+    # Check expired
+    try:
+        mtime = os.path.getmtime(fpath)
+        age_min = (time.time() - mtime) / 60
+        if age_min > ttl:
+            issues.append({
+                'type': 'expired',
+                'file': fname,
+                'age_minutes': int(age_min),
+                'ttl_minutes': ttl,
+                'owner': owner,
+                'title': title
+            })
+    except OSError:
+        pass
+
+# Check duplicate titles
+for title, entries in claims_by_title.items():
+    if len(entries) > 1:
+        issues.append({
+            'type': 'duplicate_title',
+            'title': title,
+            'claims': [{'slug': s, 'owner': o} for s, o in entries]
+        })
+
+result = {
+    'issues': issues,
+    'total_claims': len(claims_by_slug),
+    'issue_count': len(issues),
+    'healthy': len(issues) == 0
+}
+print(json.dumps(result, indent=2))
+"
+}
+
 cmd_max_claimed_version() {
     mkdir -p "$CLAIMS_DIR"
     local ttl
@@ -458,6 +651,9 @@ case "$CMD" in
     max-claimed-version)
         cmd_max_claimed_version
         ;;
+    validate)
+        cmd_validate
+        ;;
     help|--help|-h)
         echo "Usage: work-queue.sh <command> [args]"
         echo ""
@@ -472,6 +668,7 @@ case "$CMD" in
         echo "  expire                        Remove claims past TTL"
         echo "  inflight-tasks                List tasks completed in open PRs (JSON)"
         echo "  max-claimed-version           Show highest speculated version across claims"
+        echo "  validate                      Health check: detect slug mismatches, duplicates, orphans, expired"
         echo ""
         echo "Current worktree: ${WORKTREE_NAME}"
         echo "Queue dir: ${QUEUE_DIR}"
