@@ -78,3 +78,17 @@ Report which claims were expired and from which worktrees.
 | `RELEASED` | Claim successfully removed |
 | `NOT_FOUND` | No claim exists for this slug (already released or never claimed) |
 | `NOT_OWNER:<worktree>` | Claim belongs to another worktree; use `--force` to override |
+
+## Handling Duplicate Claim Files
+
+If you see duplicate claim files (same task, different slugs), run `validate` first:
+```bash
+scripts/work-queue.sh validate
+```
+This reports all issues. Then release only your own claims using the script — never delete files directly.
+
+## Safety Rules
+
+1. **Never `rm -f` claim files directly.** Always use `scripts/work-queue.sh release` or `release-all`. Direct deletion bypasses ownership checks and can delete another agent's claims.
+2. **Never `cd` to the main repo before running the script.** The script resolves the main repo path internally. Changing CWD causes worktree misidentification.
+3. **Never edit claim JSON files directly.** Use the script's subcommands.
