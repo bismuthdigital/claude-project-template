@@ -48,31 +48,38 @@ Claim N unclaimed tasks from NEXT-STEPS.md.
    scripts/work-queue.sh list
    ```
 
-5. **Parse tasks** from the High Priority and Medium Priority sections. Each task looks like:
+5. **Check in-flight PRs** for tasks already completed in unmerged PRs:
+   ```bash
+   scripts/work-queue.sh inflight-tasks
+   ```
+   This returns a JSON array of task titles that are marked `[x]` in open PRs. These tasks are being shipped by another agent and should be excluded from claiming, even though they still appear as `[ ]` in the local NEXT-STEPS.md.
+
+6. **Parse tasks** from the High Priority and Medium Priority sections. Each task looks like:
    ```markdown
    - [ ] **[role] Task title** — Description
    ```
    Extract: the checkbox state, role tag, title, and description.
 
-6. **Filter** out:
+7. **Filter** out:
    - Tasks already completed (`[x]`)
    - Tasks already claimed by another worktree (check the `list` output)
    - Tasks whose dependencies are not yet complete
+   - Tasks completed in open PRs (from the `inflight-tasks` output)
 
-7. **Select** up to N unclaimed tasks. Prefer:
+8. **Select** up to N unclaimed tasks. Prefer:
    - Higher priority first (High > Medium > Low)
    - Tasks with fewer dependencies
    - Tasks that are coherent together (same area of the codebase)
 
-8. **Speculate version** for this batch of tasks (see Version Speculation below). This determines a `speculated_version` string to include in each claim.
+9. **Speculate version** for this batch of tasks (see Version Speculation below). This determines a `speculated_version` string to include in each claim.
 
-9. **Claim** each selected task with the speculated version:
-   ```bash
-   scripts/work-queue.sh claim "<slug>" "<title>" "<section>" "<role_tag>" "<speculated_version>"
-   ```
-   The slug should be derived from the task title: lowercase, hyphens for spaces, no special chars, max 80 chars. For example: "Fix config validation edge case" → "fix-config-validation-edge-case"
+10. **Claim** each selected task with the speculated version:
+    ```bash
+    scripts/work-queue.sh claim "<slug>" "<title>" "<section>" "<role_tag>" "<speculated_version>"
+    ```
+    The slug should be derived from the task title: lowercase, hyphens for spaces, no special chars, max 80 chars. For example: "Fix config validation edge case" → "fix-config-validation-edge-case"
 
-10. **Present** the claim results:
+11. **Present** the claim results:
 
 ```
 ═══════════════════════════════════════════════════
@@ -81,7 +88,7 @@ Claim N unclaimed tasks from NEXT-STEPS.md.
 
 Worktree: festive-mendel (auto-created)
 Branch: claude-worktree-festive-mendel
-Claimed: 3 tasks | Skipped: 2 (already claimed)
+Claimed: 3 tasks | Skipped: 2 (claimed) | In-flight: 3 (open PRs)
 Speculated version: 0.18.0 (minor)
 
 ───────────────────────────────────────────────────
@@ -107,6 +114,14 @@ CLAIMED BY OTHERS
 exciting-shtern (v0.19.0):
   - [editor] Rewrite ally guide intro (42 min ago)
   - [advocate] Add alt text audit (42 min ago)
+
+───────────────────────────────────────────────────
+IN-FLIGHT (OPEN PRs)
+───────────────────────────────────────────────────
+
+  - Add content hash dedup for submissions (PR #145)
+  - Improve error messages in screening (PR #145)
+  - Add batch-submit CLI command (PR #145)
 
 ───────────────────────────────────────────────────
 
