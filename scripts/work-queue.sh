@@ -14,6 +14,7 @@
 #   work-queue.sh claimed-by-me                                # List tasks claimed by this worktree
 #   work-queue.sh expire                                       # Remove stale claims past TTL
 #   work-queue.sh init                                         # Ensure queue directory exists
+#   work-queue.sh inflight-tasks                               # List tasks completed in open PRs (JSON)
 #   work-queue.sh max-claimed-version                          # Show highest speculated version across all claims
 
 set -euo pipefail
@@ -298,6 +299,77 @@ cmd_expire() {
     echo "TOTAL_EXPIRED:${count}"
 }
 
+cmd_inflight_tasks() {
+    # Query GitHub for open PRs and extract task titles being marked complete.
+    # Returns a JSON array of task title strings.
+    # Gracefully degrades to [] if gh CLI is unavailable or fails.
+
+    if ! command -v gh &>/dev/null; then
+        echo "[]"
+        echo "warning: gh CLI not found — skipping in-flight PR check" >&2
+        return 0
+    fi
+
+    # Get open PR numbers
+    local pr_numbers
+    pr_numbers=$(gh pr list --state open --json number --jq '.[].number' 2>/dev/null) || {
+        echo "[]"
+        echo "warning: gh pr list failed — skipping in-flight PR check" >&2
+        return 0
+    }
+
+    if [[ -z "$pr_numbers" ]]; then
+        echo "[]"
+        return 0
+    fi
+
+    # For each PR, get the diff and extract completed task titles
+    local all_titles=""
+    while IFS= read -r pr_num; do
+        [[ -z "$pr_num" ]] && continue
+        local diff
+        diff=$(gh pr diff "$pr_num" 2>/dev/null) || continue
+
+        # Extract lines that are additions (+) marking tasks as complete [x] with bold title
+        # Pattern: +- [x] **[role] Task title** or +- [x] **Task title**
+        local titles
+        titles=$(echo "$diff" | grep -E '^\+.*\[x\].*\*\*' | sed 's/^+[[:space:]]*//' | \
+            sed 's/^- \[x\] //' | \
+            sed 's/\*\*\[[^]]*\] //' | \
+            sed 's/\*\*//' | \
+            sed 's/\*\*//' | \
+            sed 's/ *—.*//' | \
+            sed 's/[[:space:]]*$//') || true
+
+        if [[ -n "$titles" ]]; then
+            if [[ -n "$all_titles" ]]; then
+                all_titles="${all_titles}"$'\n'"${titles}"
+            else
+                all_titles="$titles"
+            fi
+        fi
+    done <<< "$pr_numbers"
+
+    if [[ -z "$all_titles" ]]; then
+        echo "[]"
+        return 0
+    fi
+
+    # Convert newline-separated titles to JSON array
+    python3 -c "
+import json, sys
+titles = [line.strip() for line in sys.stdin if line.strip()]
+# Deduplicate while preserving order
+seen = set()
+unique = []
+for t in titles:
+    if t not in seen:
+        seen.add(t)
+        unique.append(t)
+print(json.dumps(unique, indent=2))
+" <<< "$all_titles"
+}
+
 cmd_max_claimed_version() {
     mkdir -p "$CLAIMS_DIR"
     local ttl
@@ -380,6 +452,9 @@ case "$CMD" in
     expire)
         cmd_expire
         ;;
+    inflight-tasks)
+        cmd_inflight_tasks
+        ;;
     max-claimed-version)
         cmd_max_claimed_version
         ;;
@@ -395,6 +470,7 @@ case "$CMD" in
         echo "  check <slug>                  Check if a task is claimed"
         echo "  claimed-by-me                 List tasks claimed by this worktree"
         echo "  expire                        Remove claims past TTL"
+        echo "  inflight-tasks                List tasks completed in open PRs (JSON)"
         echo "  max-claimed-version           Show highest speculated version across claims"
         echo ""
         echo "Current worktree: ${WORKTREE_NAME}"
