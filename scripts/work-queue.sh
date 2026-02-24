@@ -116,6 +116,77 @@ slug_from_title() {
     echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | head -c 80
 }
 
+# --- Per-slug locking (mkdir-based atomic primitive) ---
+
+_HELD_LOCK=""
+
+_acquire_lock() {
+    local slug="$1"
+    local lock_dir="${CLAIMS_DIR}/${slug}.lock"
+    local max_retries=5
+    local retry_delay_ms=200
+
+    mkdir -p "$CLAIMS_DIR"
+
+    for (( i=0; i<max_retries; i++ )); do
+        if mkdir "$lock_dir" 2>/dev/null; then
+            # Won the lock — write owner file for diagnostics
+            echo "$$:$(now_epoch):${WORKTREE_NAME}" > "${lock_dir}/owner"
+            _HELD_LOCK="$lock_dir"
+            trap '_release_lock' EXIT
+            return 0
+        fi
+
+        # Lock exists — check if it's stale (>30 seconds old)
+        if [[ -d "$lock_dir" ]]; then
+            local lock_age_s=999
+            if [[ -f "${lock_dir}/owner" ]]; then
+                local lock_epoch
+                lock_epoch=$(cut -d: -f2 < "${lock_dir}/owner" 2>/dev/null) || true
+                if [[ -n "$lock_epoch" ]]; then
+                    lock_age_s=$(( $(now_epoch) - lock_epoch ))
+                fi
+            else
+                # No owner file yet — use directory mtime for staleness
+                # (owner file may not be written yet if lock was just created)
+                local dir_mtime
+                if [[ "$(uname)" == "Darwin" ]]; then
+                    dir_mtime=$(stat -f %m "$lock_dir" 2>/dev/null) || true
+                else
+                    dir_mtime=$(stat -c %Y "$lock_dir" 2>/dev/null) || true
+                fi
+                if [[ -n "$dir_mtime" ]]; then
+                    lock_age_s=$(( $(now_epoch) - dir_mtime ))
+                fi
+            fi
+
+            if (( lock_age_s > 30 )); then
+                echo "STALE_LOCK_CLEANED:${slug}" >&2
+                rm -rf "$lock_dir"
+                # Retry immediately after cleaning
+                continue
+            fi
+        fi
+
+        # Backoff before retry
+        if command -v python3 &>/dev/null; then
+            python3 -c "import time; time.sleep(${retry_delay_ms}/1000.0)"
+        else
+            sleep 1
+        fi
+    done
+
+    # Could not acquire lock after retries
+    return 1
+}
+
+_release_lock() {
+    if [[ -n "$_HELD_LOCK" && -d "$_HELD_LOCK" ]]; then
+        rm -rf "$_HELD_LOCK"
+        _HELD_LOCK=""
+    fi
+}
+
 _find_claim_by_title() {
     # Search all existing claim files for a matching task_title.
     # Returns the slug (filename without .json) if found, empty string otherwise.
@@ -170,6 +241,14 @@ cmd_claim() {
         fi
     fi
 
+    # Acquire per-slug lock (atomic via mkdir)
+    if ! _acquire_lock "$slug"; then
+        echo "LOCK_FAILED"
+        return 1
+    fi
+
+    # --- Everything below runs under the lock ---
+
     # --- Safeguard: duplicate title detection ---
     # Check if this exact title is already claimed under a different slug
     local existing_slug
@@ -178,6 +257,7 @@ cmd_claim() {
         local existing_owner
         existing_owner=$(python3 -c "import json; print(json.load(open('${CLAIMS_DIR}/${existing_slug}.json'))['agent_worktree'])" 2>/dev/null)
         echo "DUPLICATE_TITLE:${existing_slug}:${existing_owner}" >&2
+        _release_lock
         echo "DUPLICATE_TITLE"
         return 1
     fi
@@ -189,6 +269,7 @@ cmd_claim() {
         local owner
         owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])")
         if [[ "$owner" == "$WORKTREE_NAME" ]]; then
+            _release_lock
             echo "ALREADY_OWNED"
             return 0
         fi
@@ -202,14 +283,16 @@ cmd_claim() {
             echo "EXPIRED_RECLAIMED"
             # Fall through to write new claim
         else
+            _release_lock
             echo "CLAIMED_BY:${owner}"
             return 1
         fi
     fi
 
-    # Write claim
+    # Write claim atomically via temp file + mv
     local ttl
     ttl=$(get_ttl)
+    local tmp_file="${CLAIMS_DIR}/${slug}.tmp.$$"
     python3 -c "
 import json, sys
 claim = {
@@ -222,9 +305,21 @@ claim = {
     'ttl_minutes': ${ttl},
     'speculated_version': '${version}' if '${version}' else None
 }
-with open('${claim_file}', 'w') as f:
+with open('${tmp_file}', 'w') as f:
     json.dump(claim, f, indent=2)
 "
+    mv -f "$tmp_file" "$claim_file"
+
+    # Post-write verification: confirm our worktree owns the claim
+    local verify_owner
+    verify_owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])" 2>/dev/null) || true
+    if [[ "$verify_owner" != "$WORKTREE_NAME" ]]; then
+        _release_lock
+        echo "CLAIM_VERIFY_FAILED"
+        return 1
+    fi
+
+    _release_lock
     echo "CLAIMED"
     return 0
 }
@@ -248,6 +343,8 @@ cmd_release() {
     fi
 
     rm -f "$claim_file"
+    # Clean up any orphaned lock directory
+    rm -rf "${CLAIMS_DIR}/${slug}.lock"
     echo "RELEASED"
     return 0
 }
@@ -260,7 +357,11 @@ cmd_release_all() {
         local owner
         owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])" 2>/dev/null) || continue
         if [[ "$owner" == "$WORKTREE_NAME" ]]; then
+            local slug
+            slug=$(basename "$claim_file" .json)
             rm -f "$claim_file"
+            # Clean up any orphaned lock directory
+            rm -rf "${CLAIMS_DIR}/${slug}.lock"
             count=$((count + 1))
         fi
     done
@@ -372,6 +473,8 @@ cmd_expire() {
             local slug
             slug=$(basename "$claim_file" .json)
             rm -f "$claim_file"
+            # Clean up any orphaned lock directory
+            rm -rf "${CLAIMS_DIR}/${slug}.lock"
             echo "EXPIRED:${slug}"
             count=$((count + 1))
         fi
@@ -412,14 +515,19 @@ cmd_inflight_tasks() {
 
         # Extract lines that are additions (+) marking tasks as complete [x] with bold title
         # Pattern: +- [x] **[role] Task title** or +- [x] **Task title**
+        # Uses Python regex to handle: multi-word role tags, special chars, em-dash/double-hyphen
         local titles
-        titles=$(echo "$diff" | grep -E '^\+.*\[x\].*\*\*' | sed 's/^+[[:space:]]*//' | \
-            sed 's/^- \[x\] //' | \
-            sed 's/\*\*\[[^]]*\] //' | \
-            sed 's/\*\*//' | \
-            sed 's/\*\*//' | \
-            sed 's/ *—.*//' | \
-            sed 's/[[:space:]]*$//') || true
+        titles=$(echo "$diff" | python3 -c "
+import re, sys
+for line in sys.stdin:
+    m = re.match(r'^\+\s*-\s*\[x\]\s*\*\*(?:\[[^\]]*\]\s*)?(.+?)\*\*', line)
+    if m:
+        title = m.group(1).strip()
+        # Strip trailing description (em-dash or double-hyphen separator)
+        title = re.split(r'\s*[—]\s*|\s+--\s+', title)[0].strip()
+        if title:
+            print(title)
+") || true
 
         if [[ -n "$titles" ]]; then
             if [[ -n "$all_titles" ]]; then
@@ -570,23 +678,28 @@ cmd_max_claimed_version() {
 
     # Collect all non-expired speculated versions and find the highest
     python3 -c "
-import json, os, sys
+import json, os, sys, time
 
 claims_dir = '${CLAIMS_DIR}'
-ttl = ${ttl}
+ttl_seconds = ${ttl} * 60
 versions = []
+now = time.time()
 
 for fname in sorted(os.listdir(claims_dir)):
     if not fname.endswith('.json'):
         continue
     fpath = os.path.join(claims_dir, fname)
     try:
+        # Skip expired claims
+        mtime = os.path.getmtime(fpath)
+        if (now - mtime) > ttl_seconds:
+            continue
         with open(fpath) as f:
             claim = json.load(f)
         v = claim.get('speculated_version')
         if v:
             versions.append(v)
-    except (json.JSONDecodeError, KeyError):
+    except (json.JSONDecodeError, KeyError, OSError):
         continue
 
 if not versions:

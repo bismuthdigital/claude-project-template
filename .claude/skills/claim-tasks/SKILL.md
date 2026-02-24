@@ -215,7 +215,7 @@ When claiming tasks, speculate on the next appropriate semver version. This help
 - The speculated version is a **best guess** — the actual version will be determined at `/version` time based on real commit analysis
 - If the `/version` skill detects a different increment level from actual commits, the actual version takes precedence
 - This coordination is advisory, not enforced — it prevents the common case where two agents both target the same version number
-- Expired claims (past TTL) are still included in version calculations to be conservative
+- Expired claims (past TTL) are excluded from version calculations — crashed agents don't inflate version speculation for active agents
 
 ## Task Slug Generation
 
@@ -241,6 +241,15 @@ If a claim attempt returns `EXPIRED_RECLAIMED`:
 If a claim attempt returns `ALREADY_OWNED`:
 - This worktree already has this task; skip re-claiming
 - Include it in the "your tasks" list
+
+If a claim attempt returns `LOCK_FAILED`:
+- Another agent is actively claiming this exact task right now
+- Skip it and try the next unclaimed task
+- Report the skip in the output (this is rare and transient)
+
+### Lock Directories
+
+The work queue uses `.lock/` directories inside `claims/` for atomic mutual exclusion. These are ephemeral — they exist only during the brief window while a claim is being written. Lock dirs older than 30 seconds are automatically cleaned as stale. You should never need to manually manage `.lock/` directories; they are created and removed by `work-queue.sh` internally.
 
 ## Integration
 
