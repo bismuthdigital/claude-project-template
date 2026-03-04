@@ -493,7 +493,7 @@ MERGE
 SYNC LOCAL
 ───────────────────────────────────────────────────
 ✓ Fetched latest from origin
-✓ Pulled into /Users/jwilkin/code/claude/project
+✓ Pulled into /home/user/code/project
 ✓ Local repo now at: abc1234 Add /ship skill...
 
 ═══════════════════════════════════════════════════

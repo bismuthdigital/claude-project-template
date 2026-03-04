@@ -15,7 +15,7 @@ A reusable Claude Code configuration template for Python projects. Provides sens
 ### Quick Install (New Project)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/janewilkin/claude-project-template/main/install.sh | bash -s -- my-project
+curl -fsSL https://raw.githubusercontent.com/bismuthdigital/claude-project-template/main/install.sh | bash -s -- my-project
 ```
 
 This creates a new project with:
@@ -27,7 +27,7 @@ This creates a new project with:
 
 ```bash
 cd your-project
-curl -fsSL https://raw.githubusercontent.com/janewilkin/claude-project-template/main/install.sh | bash -s -- --existing
+curl -fsSL https://raw.githubusercontent.com/bismuthdigital/claude-project-template/main/install.sh | bash -s -- --existing
 ```
 
 This adds the `.claude/` configuration to your current directory.
@@ -39,7 +39,7 @@ This adds the `.claude/` configuration to your current directory.
 
 ```bash
 # Clone the template
-git clone https://github.com/janewilkin/claude-project-template.git my-project
+git clone https://github.com/bismuthdigital/claude-project-template.git my-project
 cd my-project
 
 # Remove template's git history and start fresh
@@ -60,7 +60,7 @@ mv src/your_package src/my_package
 
 ```bash
 # Clone the template somewhere temporary
-git clone https://github.com/janewilkin/claude-project-template.git /tmp/claude-template
+git clone https://github.com/bismuthdigital/claude-project-template.git /tmp/claude-template
 
 # Copy the .claude directory to your project
 cp -r /tmp/claude-template/.claude your-project/

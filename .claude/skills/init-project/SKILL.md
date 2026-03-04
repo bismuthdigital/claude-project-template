@@ -102,7 +102,7 @@ if [ -d "$TARGET_DIR" ]; then
     exit 1
 fi
 
-if ! git clone --depth 1 https://github.com/janewilkin/claude-project-template.git "$TARGET_DIR" 2>&1; then
+if ! git clone --depth 1 https://github.com/bismuthdigital/claude-project-template.git "$TARGET_DIR" 2>&1; then
     echo "✗ Failed to clone template"
     exit 1
 fi

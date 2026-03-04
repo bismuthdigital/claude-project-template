@@ -15,7 +15,10 @@
 
 set -euo pipefail
 
-CLAUDE_DIR="$HOME/code/claude"
+# Directory containing Claude-configured projects to sync.
+# Override with CLAUDE_PROJECTS_DIR env var, e.g.:
+#   CLAUDE_PROJECTS_DIR="$HOME/projects" ./scripts/sync-all-projects.sh
+CLAUDE_DIR="${CLAUDE_PROJECTS_DIR:-$HOME/code/claude}"
 LOG_DIR="$HOME/.claude/sync-logs/$(date +%Y%m%d-%H%M%S)"
 MAX_PARALLEL=4
 DRY_RUN=false

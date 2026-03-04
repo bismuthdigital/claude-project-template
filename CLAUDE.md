@@ -2,7 +2,7 @@
 
 ## Overview
 
-[Brief description of what this project does - update this when you start using the template]
+A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 19 custom skills — so you can start building immediately with sensible defaults.
 
 ## Architecture
 
@@ -106,4 +106,4 @@ This project includes Claude Code skills for development:
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
 | `/prompt-review` | Review AI prompts for quality and suggest improvements |
 | `/next-steps` | Identify, consolidate, and maintain project next steps |
-| `/aws-manifest` | Generate AWS infrastructure manifest for bismuth-aws-org |
+| `/aws-manifest` | Generate AWS infrastructure manifest |

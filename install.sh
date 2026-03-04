@@ -1,15 +1,15 @@
 #!/bin/bash
 # Claude Project Template Installer
-# https://github.com/janewilkin/claude-project-template
+# https://github.com/bismuthdigital/claude-project-template
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/janewilkin/claude-project-template/main/install.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/janewilkin/claude-project-template/main/install.sh | bash -s -- my-project
-#   curl -fsSL https://raw.githubusercontent.com/janewilkin/claude-project-template/main/install.sh | bash -s -- --existing
+#   curl -fsSL https://raw.githubusercontent.com/bismuthdigital/claude-project-template/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/bismuthdigital/claude-project-template/main/install.sh | bash -s -- my-project
+#   curl -fsSL https://raw.githubusercontent.com/bismuthdigital/claude-project-template/main/install.sh | bash -s -- --existing
 
 set -e
 
-TEMPLATE_REPO="https://github.com/janewilkin/claude-project-template.git"
+TEMPLATE_REPO="https://github.com/bismuthdigital/claude-project-template.git"
 TEMPLATE_NAME="claude-project-template"
 
 # Colors for output
@@ -46,7 +46,7 @@ Examples:
   install.sh --existing
 
   # Piped installation
-  curl -fsSL https://raw.githubusercontent.com/janewilkin/claude-project-template/main/install.sh | bash -s -- my-project
+  curl -fsSL https://raw.githubusercontent.com/bismuthdigital/claude-project-template/main/install.sh | bash -s -- my-project
 EOF
     exit 0
 }

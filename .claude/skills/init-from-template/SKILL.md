@@ -37,12 +37,12 @@ The template source can be overridden via `.claude/template.json` in the current
 
 ```json
 {
-  "repo": "janewilkin/claude-project-template",
+  "repo": "bismuthdigital/claude-project-template",
   "branch": "main"
 }
 ```
 
-Defaults to `janewilkin/claude-project-template` on `main`.
+Defaults to `bismuthdigital/claude-project-template` on `main`.
 
 ## Process
 
@@ -67,7 +67,7 @@ PACKAGE_NAME=$(echo "$PROJECT_NAME" | tr '-' '_' | tr '[:upper:]' '[:lower:]')
 ```bash
 TEMPLATE_REPO=$(cat .claude/template.json 2>/dev/null | grep -o '"repo"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
 TEMPLATE_BRANCH=$(cat .claude/template.json 2>/dev/null | grep -o '"branch"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
-TEMPLATE_REPO="${TEMPLATE_REPO:-janewilkin/claude-project-template}"
+TEMPLATE_REPO="${TEMPLATE_REPO:-bismuthdigital/claude-project-template}"
 TEMPLATE_BRANCH="${TEMPLATE_BRANCH:-main}"
 ```
 

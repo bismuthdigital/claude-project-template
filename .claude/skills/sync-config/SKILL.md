@@ -22,12 +22,12 @@ The template source is configured in `.claude/template.json`:
 
 ```json
 {
-  "repo": "janewilkin/claude-project-template",
+  "repo": "bismuthdigital/claude-project-template",
   "branch": "main"
 }
 ```
 
-If this file doesn't exist, defaults to `janewilkin/claude-project-template` on `main`.
+If this file doesn't exist, defaults to `bismuthdigital/claude-project-template` on `main`.
 
 ## Process
 
@@ -41,7 +41,7 @@ Fetch the template using an authentication strategy that works in cloud environm
 # Read template source config (or use defaults)
 TEMPLATE_REPO=$(cat .claude/template.json 2>/dev/null | grep -o '"repo"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
 TEMPLATE_BRANCH=$(cat .claude/template.json 2>/dev/null | grep -o '"branch"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
-TEMPLATE_REPO="${TEMPLATE_REPO:-janewilkin/claude-project-template}"
+TEMPLATE_REPO="${TEMPLATE_REPO:-bismuthdigital/claude-project-template}"
 TEMPLATE_BRANCH="${TEMPLATE_BRANCH:-main}"
 ```
 
