@@ -1,0 +1,794 @@
+#!/usr/bin/env bash
+# work-queue.sh — Manage task claims for concurrent Claude Code agents
+#
+# All worktrees share the same main repo, so we store claims in a known
+# location relative to the main repo root. This script resolves that path
+# automatically from any worktree.
+#
+# Usage:
+#   work-queue.sh claim  <slug> <title> <section> <role_tag> [version]  # Claim a task
+#   work-queue.sh release <slug>                               # Release a claim
+#   work-queue.sh release-all                                  # Release all claims for this worktree
+#   work-queue.sh list                                         # List all active claims
+#   work-queue.sh check <slug>                                 # Check if a task is claimed
+#   work-queue.sh claimed-by-me                                # List tasks claimed by this worktree
+#   work-queue.sh expire                                       # Remove stale claims past TTL
+#   work-queue.sh init                                         # Ensure queue directory exists
+#   work-queue.sh inflight-tasks                               # List tasks completed in open PRs (JSON)
+#   work-queue.sh max-claimed-version                          # Show highest speculated version across all claims
+#   work-queue.sh validate                                     # Health check: detect claim issues
+
+set -euo pipefail
+
+# --- Resolve paths ---
+
+# Find the main repo root (first line of worktree list is always the main repo)
+MAIN_REPO=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
+
+# Determine which worktree we're in (layered detection)
+_detect_worktree() {
+    # 1. Explicit env var (highest priority — set by caller)
+    if [[ -n "${WORK_QUEUE_WORKTREE:-}" ]]; then
+        echo "$WORK_QUEUE_WORKTREE"
+        return
+    fi
+
+    # 2. Check script's own resolved path for .claude/worktrees/<name>/
+    local script_path
+    script_path=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+    if [[ "$script_path" =~ \.claude/worktrees/([^/]+)/ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return
+    fi
+
+    # 3. Check git's internal worktree directory for /worktrees/<name> suffix
+    local git_dir
+    git_dir=$(git rev-parse --git-dir 2>/dev/null || true)
+    if [[ "$git_dir" =~ /worktrees/([^/]+)$ ]]; then
+        echo "${BASH_REMATCH[1]}"
+        return
+    fi
+
+    # 4. CWD-based detection (legacy fallback)
+    local current_dir
+    current_dir=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+    if [[ "$current_dir" == "$MAIN_REPO" ]]; then
+        echo "main"
+    else
+        basename "$current_dir"
+    fi
+}
+
+WORKTREE_NAME=$(_detect_worktree)
+
+# Warn if detected as "main" but context suggests otherwise
+if [[ "$WORKTREE_NAME" == "main" ]]; then
+    _script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
+    if [[ "$_script_dir" =~ \.claude/worktrees/ ]]; then
+        echo "WARNING: Worktree detected as 'main' but script is running from a worktree path." >&2
+        echo "Set WORK_QUEUE_WORKTREE=<name> to override." >&2
+    fi
+    unset _script_dir
+fi
+
+# Queue directory lives in the main repo (shared across all worktrees)
+QUEUE_DIR="${MAIN_REPO}/.claude/work-queue"
+CLAIMS_DIR="${QUEUE_DIR}/claims"
+CONFIG_FILE="${QUEUE_DIR}/config.json"
+
+# Default TTL in minutes
+DEFAULT_TTL=120
+
+# --- Helper functions ---
+
+get_ttl() {
+    if [[ -f "$CONFIG_FILE" ]]; then
+        python3 -c "import json; print(json.load(open('$CONFIG_FILE')).get('ttl_minutes', $DEFAULT_TTL))" 2>/dev/null || echo "$DEFAULT_TTL"
+    else
+        echo "$DEFAULT_TTL"
+    fi
+}
+
+now_iso() {
+    date -u +"%Y-%m-%dT%H:%M:%SZ"
+}
+
+now_epoch() {
+    date +%s
+}
+
+file_age_minutes() {
+    local file="$1"
+    if [[ "$(uname)" == "Darwin" ]]; then
+        local file_epoch
+        file_epoch=$(stat -f %m "$file")
+    else
+        local file_epoch
+        file_epoch=$(stat -c %Y "$file")
+    fi
+    local now
+    now=$(now_epoch)
+    echo $(( (now - file_epoch) / 60 ))
+}
+
+slug_from_title() {
+    # Convert a task title to a filesystem-safe slug
+    echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-//' | sed 's/-$//' | head -c 80
+}
+
+# --- Per-slug locking (mkdir-based atomic primitive) ---
+
+_HELD_LOCK=""
+
+_acquire_lock() {
+    local slug="$1"
+    local lock_dir="${CLAIMS_DIR}/${slug}.lock"
+    local max_retries=5
+    local retry_delay_ms=200
+
+    mkdir -p "$CLAIMS_DIR"
+
+    for (( i=0; i<max_retries; i++ )); do
+        if mkdir "$lock_dir" 2>/dev/null; then
+            # Won the lock — write owner file for diagnostics
+            echo "$$:$(now_epoch):${WORKTREE_NAME}" > "${lock_dir}/owner"
+            _HELD_LOCK="$lock_dir"
+            trap '_release_lock' EXIT
+            return 0
+        fi
+
+        # Lock exists — check if it's stale (>30 seconds old)
+        if [[ -d "$lock_dir" ]]; then
+            local lock_age_s=999
+            if [[ -f "${lock_dir}/owner" ]]; then
+                local lock_epoch
+                lock_epoch=$(cut -d: -f2 < "${lock_dir}/owner" 2>/dev/null) || true
+                if [[ -n "$lock_epoch" ]]; then
+                    lock_age_s=$(( $(now_epoch) - lock_epoch ))
+                fi
+            else
+                # No owner file yet — use directory mtime for staleness
+                # (owner file may not be written yet if lock was just created)
+                local dir_mtime
+                if [[ "$(uname)" == "Darwin" ]]; then
+                    dir_mtime=$(stat -f %m "$lock_dir" 2>/dev/null) || true
+                else
+                    dir_mtime=$(stat -c %Y "$lock_dir" 2>/dev/null) || true
+                fi
+                if [[ -n "$dir_mtime" ]]; then
+                    lock_age_s=$(( $(now_epoch) - dir_mtime ))
+                fi
+            fi
+
+            if (( lock_age_s > 30 )); then
+                echo "STALE_LOCK_CLEANED:${slug}" >&2
+                rm -rf "$lock_dir"
+                # Retry immediately after cleaning
+                continue
+            fi
+        fi
+
+        # Backoff before retry
+        if command -v python3 &>/dev/null; then
+            python3 -c "import time; time.sleep(${retry_delay_ms}/1000.0)"
+        else
+            sleep 1
+        fi
+    done
+
+    # Could not acquire lock after retries
+    return 1
+}
+
+_release_lock() {
+    if [[ -n "$_HELD_LOCK" && -d "$_HELD_LOCK" ]]; then
+        rm -rf "$_HELD_LOCK"
+        _HELD_LOCK=""
+    fi
+}
+
+_find_claim_by_title() {
+    # Search all existing claim files for a matching task_title.
+    # Returns the slug (filename without .json) if found, empty string otherwise.
+    local target_title="$1"
+    mkdir -p "$CLAIMS_DIR"
+    for claim_file in "$CLAIMS_DIR"/*.json; do
+        [[ -f "$claim_file" ]] || continue
+        local title
+        title=$(python3 -c "import json; print(json.load(open('$claim_file')).get('task_title', ''))" 2>/dev/null) || continue
+        if [[ "$title" == "$target_title" ]]; then
+            basename "$claim_file" .json
+            return 0
+        fi
+    done
+    echo ""
+    return 0
+}
+
+# --- Commands ---
+
+cmd_init() {
+    mkdir -p "$CLAIMS_DIR"
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        cat > "$CONFIG_FILE" << 'CONF'
+{
+    "ttl_minutes": 120
+}
+CONF
+    fi
+    echo "Work queue initialized at: ${QUEUE_DIR}"
+    echo "Claims dir: ${CLAIMS_DIR}"
+    echo "Worktree: ${WORKTREE_NAME}"
+}
+
+cmd_claim() {
+    local slug="$1"
+    local title="${2:-$slug}"
+    local section="${3:-}"
+    local role_tag="${4:-}"
+    local version="${5:-}"
+
+    mkdir -p "$CLAIMS_DIR"
+
+    # --- Safeguard: canonical slug enforcement ---
+    # If a title was provided, compute the canonical slug and correct if needed
+    if [[ -n "$title" && "$title" != "$slug" ]]; then
+        local canonical
+        canonical=$(slug_from_title "$title")
+        if [[ "$canonical" != "$slug" ]]; then
+            echo "SLUG_CORRECTED:${slug}:${canonical}" >&2
+            slug="$canonical"
+        fi
+    fi
+
+    # Acquire per-slug lock (atomic via mkdir)
+    if ! _acquire_lock "$slug"; then
+        echo "LOCK_FAILED"
+        return 1
+    fi
+
+    # --- Everything below runs under the lock ---
+
+    # --- Safeguard: duplicate title detection ---
+    # Check if this exact title is already claimed under a different slug
+    local existing_slug
+    existing_slug=$(_find_claim_by_title "$title")
+    if [[ -n "$existing_slug" && "$existing_slug" != "$slug" ]]; then
+        local existing_owner
+        existing_owner=$(python3 -c "import json; print(json.load(open('${CLAIMS_DIR}/${existing_slug}.json'))['agent_worktree'])" 2>/dev/null)
+        echo "DUPLICATE_TITLE:${existing_slug}:${existing_owner}" >&2
+        _release_lock
+        echo "DUPLICATE_TITLE"
+        return 1
+    fi
+
+    local claim_file="${CLAIMS_DIR}/${slug}.json"
+
+    # Check if already claimed
+    if [[ -f "$claim_file" ]]; then
+        local owner
+        owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])")
+        if [[ "$owner" == "$WORKTREE_NAME" ]]; then
+            _release_lock
+            echo "ALREADY_OWNED"
+            return 0
+        fi
+
+        # Check if the claim is expired
+        local age
+        age=$(file_age_minutes "$claim_file")
+        local ttl
+        ttl=$(get_ttl)
+        if (( age > ttl )); then
+            echo "EXPIRED_RECLAIMED"
+            # Fall through to write new claim
+        else
+            _release_lock
+            echo "CLAIMED_BY:${owner}"
+            return 1
+        fi
+    fi
+
+    # Write claim atomically via temp file + mv
+    local ttl
+    ttl=$(get_ttl)
+    local tmp_file="${CLAIMS_DIR}/${slug}.tmp.$$"
+    python3 -c "
+import json, sys
+claim = {
+    'task_slug': '${slug}',
+    'task_title': $(python3 -c "import json; print(json.dumps('$title'))"),
+    'section': $(python3 -c "import json; print(json.dumps('$section'))"),
+    'role_tag': $(python3 -c "import json; print(json.dumps('$role_tag'))"),
+    'agent_worktree': '${WORKTREE_NAME}',
+    'claimed_at': '$(now_iso)',
+    'ttl_minutes': ${ttl},
+    'speculated_version': '${version}' if '${version}' else None
+}
+with open('${tmp_file}', 'w') as f:
+    json.dump(claim, f, indent=2)
+"
+    mv -f "$tmp_file" "$claim_file"
+
+    # Post-write verification: confirm our worktree owns the claim
+    local verify_owner
+    verify_owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])" 2>/dev/null) || true
+    if [[ "$verify_owner" != "$WORKTREE_NAME" ]]; then
+        _release_lock
+        echo "CLAIM_VERIFY_FAILED"
+        return 1
+    fi
+
+    _release_lock
+    echo "CLAIMED"
+    return 0
+}
+
+cmd_release() {
+    local slug="$1"
+    local claim_file="${CLAIMS_DIR}/${slug}.json"
+
+    if [[ ! -f "$claim_file" ]]; then
+        echo "NOT_FOUND"
+        return 0
+    fi
+
+    local owner
+    owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])")
+
+    # Only release your own claims (unless force)
+    if [[ "$owner" != "$WORKTREE_NAME" && "${2:-}" != "--force" ]]; then
+        echo "NOT_OWNER:${owner}"
+        return 1
+    fi
+
+    rm -f "$claim_file"
+    # Clean up any orphaned lock directory
+    rm -rf "${CLAIMS_DIR}/${slug}.lock"
+    echo "RELEASED"
+    return 0
+}
+
+cmd_release_all() {
+    mkdir -p "$CLAIMS_DIR"
+    local count=0
+    for claim_file in "$CLAIMS_DIR"/*.json; do
+        [[ -f "$claim_file" ]] || continue
+        local owner
+        owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])" 2>/dev/null) || continue
+        if [[ "$owner" == "$WORKTREE_NAME" ]]; then
+            local slug
+            slug=$(basename "$claim_file" .json)
+            rm -f "$claim_file"
+            # Clean up any orphaned lock directory
+            rm -rf "${CLAIMS_DIR}/${slug}.lock"
+            count=$((count + 1))
+        fi
+    done
+    echo "RELEASED:${count}"
+}
+
+cmd_list() {
+    mkdir -p "$CLAIMS_DIR"
+    local ttl
+    ttl=$(get_ttl)
+
+    echo "{"
+    echo '  "claims": ['
+    local first=true
+    for claim_file in "$CLAIMS_DIR"/*.json; do
+        [[ -f "$claim_file" ]] || continue
+        local age
+        age=$(file_age_minutes "$claim_file")
+        local expired="false"
+        if (( age > ttl )); then
+            expired="true"
+        fi
+
+        if [[ "$first" == "true" ]]; then
+            first=false
+        else
+            echo ","
+        fi
+
+        # Read the claim and add age/expired fields
+        python3 -c "
+import json
+with open('$claim_file') as f:
+    claim = json.load(f)
+claim['age_minutes'] = $age
+claim['expired'] = $(if [[ "$expired" == "true" ]]; then echo "True"; else echo "False"; fi)
+print('    ' + json.dumps(claim), end='')
+"
+    done
+    echo ""
+    echo "  ],"
+    echo "  \"queue_dir\": \"${QUEUE_DIR}\","
+    echo "  \"current_worktree\": \"${WORKTREE_NAME}\","
+    echo "  \"ttl_minutes\": ${ttl}"
+    echo "}"
+}
+
+cmd_check() {
+    local slug="$1"
+    local claim_file="${CLAIMS_DIR}/${slug}.json"
+
+    if [[ ! -f "$claim_file" ]]; then
+        echo "UNCLAIMED"
+        return 0
+    fi
+
+    local age
+    age=$(file_age_minutes "$claim_file")
+    local ttl
+    ttl=$(get_ttl)
+
+    if (( age > ttl )); then
+        echo "EXPIRED"
+        return 0
+    fi
+
+    local owner
+    owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])")
+    echo "CLAIMED_BY:${owner}"
+    return 0
+}
+
+cmd_claimed_by_me() {
+    mkdir -p "$CLAIMS_DIR"
+    echo "["
+    local first=true
+    for claim_file in "$CLAIMS_DIR"/*.json; do
+        [[ -f "$claim_file" ]] || continue
+        local owner
+        owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])" 2>/dev/null) || continue
+        if [[ "$owner" == "$WORKTREE_NAME" ]]; then
+            if [[ "$first" == "true" ]]; then
+                first=false
+            else
+                echo ","
+            fi
+            python3 -c "
+import json
+with open('$claim_file') as f:
+    print('  ' + json.dumps(json.load(f)), end='')
+"
+        fi
+    done
+    echo ""
+    echo "]"
+}
+
+cmd_expire() {
+    mkdir -p "$CLAIMS_DIR"
+    local ttl
+    ttl=$(get_ttl)
+    local count=0
+
+    for claim_file in "$CLAIMS_DIR"/*.json; do
+        [[ -f "$claim_file" ]] || continue
+        local age
+        age=$(file_age_minutes "$claim_file")
+        if (( age > ttl )); then
+            local slug
+            slug=$(basename "$claim_file" .json)
+            rm -f "$claim_file"
+            # Clean up any orphaned lock directory
+            rm -rf "${CLAIMS_DIR}/${slug}.lock"
+            echo "EXPIRED:${slug}"
+            count=$((count + 1))
+        fi
+    done
+    echo "TOTAL_EXPIRED:${count}"
+}
+
+cmd_inflight_tasks() {
+    # Query GitHub for open PRs and extract task titles being marked complete.
+    # Returns a JSON array of task title strings.
+    # Gracefully degrades to [] if gh CLI is unavailable or fails.
+
+    if ! command -v gh &>/dev/null; then
+        echo "[]"
+        echo "warning: gh CLI not found — skipping in-flight PR check" >&2
+        return 0
+    fi
+
+    # Get open PR numbers
+    local pr_numbers
+    pr_numbers=$(gh pr list --state open --json number --jq '.[].number' 2>/dev/null) || {
+        echo "[]"
+        echo "warning: gh pr list failed — skipping in-flight PR check" >&2
+        return 0
+    }
+
+    if [[ -z "$pr_numbers" ]]; then
+        echo "[]"
+        return 0
+    fi
+
+    # For each PR, get the diff and extract completed task titles
+    local all_titles=""
+    while IFS= read -r pr_num; do
+        [[ -z "$pr_num" ]] && continue
+        local diff
+        diff=$(gh pr diff "$pr_num" 2>/dev/null) || continue
+
+        # Extract lines that are additions (+) marking tasks as complete [x] with bold title
+        # Pattern: +- [x] **[role] Task title** or +- [x] **Task title**
+        # Uses Python regex to handle: multi-word role tags, special chars, em-dash/double-hyphen
+        local titles
+        titles=$(echo "$diff" | python3 -c "
+import re, sys
+for line in sys.stdin:
+    m = re.match(r'^\+\s*-\s*\[x\]\s*\*\*(?:\[[^\]]*\]\s*)?(.+?)\*\*', line)
+    if m:
+        title = m.group(1).strip()
+        # Strip trailing description (em-dash or double-hyphen separator)
+        title = re.split(r'\s*[—]\s*|\s+--\s+', title)[0].strip()
+        if title:
+            print(title)
+") || true
+
+        if [[ -n "$titles" ]]; then
+            if [[ -n "$all_titles" ]]; then
+                all_titles="${all_titles}"$'\n'"${titles}"
+            else
+                all_titles="$titles"
+            fi
+        fi
+    done <<< "$pr_numbers"
+
+    if [[ -z "$all_titles" ]]; then
+        echo "[]"
+        return 0
+    fi
+
+    # Convert newline-separated titles to JSON array
+    python3 -c "
+import json, sys
+titles = [line.strip() for line in sys.stdin if line.strip()]
+# Deduplicate while preserving order
+seen = set()
+unique = []
+for t in titles:
+    if t not in seen:
+        seen.add(t)
+        unique.append(t)
+print(json.dumps(unique, indent=2))
+" <<< "$all_titles"
+}
+
+cmd_validate() {
+    mkdir -p "$CLAIMS_DIR"
+    local ttl
+    ttl=$(get_ttl)
+
+    # Collect all worktrees for orphan detection
+    local worktree_names
+    worktree_names=$(git worktree list --porcelain | grep '^worktree ' | while read -r _ wt_path; do
+        if [[ "$wt_path" == "$MAIN_REPO" ]]; then
+            echo "main"
+        else
+            basename "$wt_path"
+        fi
+    done)
+
+    python3 -c "
+import json, os, re, sys, time
+
+claims_dir = '${CLAIMS_DIR}'
+ttl = ${ttl}
+worktree_names = set('''${worktree_names}'''.strip().split('\n'))
+
+def slug_from_title(title):
+    \"\"\"Match the bash slug_from_title exactly: lowercase, replace non-alnum
+    with hyphens, collapse runs, strip ONE leading and ONE trailing hyphen,
+    truncate to 80 bytes.\"\"\"
+    s = re.sub(r'[^a-z0-9]', '-', title.lower())
+    s = re.sub(r'-+', '-', s)
+    if s.startswith('-'):
+        s = s[1:]
+    if s.endswith('-'):
+        s = s[:-1]
+    return s[:80]
+
+issues = []
+claims_by_title = {}  # title -> [(slug, owner)]
+claims_by_slug = {}   # slug -> claim data
+
+for fname in sorted(os.listdir(claims_dir)):
+    if not fname.endswith('.json'):
+        continue
+    slug = fname[:-5]
+    fpath = os.path.join(claims_dir, fname)
+    try:
+        with open(fpath) as f:
+            claim = json.load(f)
+    except (json.JSONDecodeError, OSError) as e:
+        issues.append({'type': 'invalid_json', 'file': fname, 'error': str(e)})
+        continue
+
+    claims_by_slug[slug] = claim
+    title = claim.get('task_title', '')
+    owner = claim.get('agent_worktree', '')
+
+    # Check slug/title mismatch
+    canonical = slug_from_title(title)
+    if canonical and slug != canonical:
+        issues.append({
+            'type': 'slug_mismatch',
+            'file': fname,
+            'current_slug': slug,
+            'canonical_slug': canonical,
+            'title': title
+        })
+
+    # Track titles for duplicate detection
+    if title:
+        claims_by_title.setdefault(title, []).append((slug, owner))
+
+    # Check orphaned worktrees
+    if owner and owner not in worktree_names:
+        issues.append({
+            'type': 'orphaned_worktree',
+            'file': fname,
+            'owner': owner,
+            'title': title
+        })
+
+    # Check expired
+    try:
+        mtime = os.path.getmtime(fpath)
+        age_min = (time.time() - mtime) / 60
+        if age_min > ttl:
+            issues.append({
+                'type': 'expired',
+                'file': fname,
+                'age_minutes': int(age_min),
+                'ttl_minutes': ttl,
+                'owner': owner,
+                'title': title
+            })
+    except OSError:
+        pass
+
+# Check duplicate titles
+for title, entries in claims_by_title.items():
+    if len(entries) > 1:
+        issues.append({
+            'type': 'duplicate_title',
+            'title': title,
+            'claims': [{'slug': s, 'owner': o} for s, o in entries]
+        })
+
+result = {
+    'issues': issues,
+    'total_claims': len(claims_by_slug),
+    'issue_count': len(issues),
+    'healthy': len(issues) == 0
+}
+print(json.dumps(result, indent=2))
+"
+}
+
+cmd_max_claimed_version() {
+    mkdir -p "$CLAIMS_DIR"
+    local ttl
+    ttl=$(get_ttl)
+
+    # Collect all non-expired speculated versions and find the highest
+    python3 -c "
+import json, os, sys, time
+
+claims_dir = '${CLAIMS_DIR}'
+ttl_seconds = ${ttl} * 60
+versions = []
+now = time.time()
+
+for fname in sorted(os.listdir(claims_dir)):
+    if not fname.endswith('.json'):
+        continue
+    fpath = os.path.join(claims_dir, fname)
+    try:
+        # Skip expired claims
+        mtime = os.path.getmtime(fpath)
+        if (now - mtime) > ttl_seconds:
+            continue
+        with open(fpath) as f:
+            claim = json.load(f)
+        v = claim.get('speculated_version')
+        if v:
+            versions.append(v)
+    except (json.JSONDecodeError, KeyError, OSError):
+        continue
+
+if not versions:
+    print('NONE')
+    sys.exit(0)
+
+# Parse and sort semver strings, return the highest
+def parse_ver(v):
+    parts = v.lstrip('v').split('.')
+    return tuple(int(p) for p in parts)
+
+versions.sort(key=parse_ver)
+print(versions[-1])
+"
+}
+
+# --- Main dispatch ---
+
+CMD="${1:-help}"
+shift || true
+
+case "$CMD" in
+    init)
+        cmd_init
+        ;;
+    claim)
+        if [[ $# -lt 1 ]]; then
+            echo "Usage: work-queue.sh claim <slug> [title] [section] [role_tag] [version]" >&2
+            exit 1
+        fi
+        cmd_claim "${1:-}" "${2:-}" "${3:-}" "${4:-}" "${5:-}"
+        ;;
+    release)
+        if [[ $# -lt 1 ]]; then
+            echo "Usage: work-queue.sh release <slug> [--force]" >&2
+            exit 1
+        fi
+        cmd_release "$@"
+        ;;
+    release-all)
+        cmd_release_all
+        ;;
+    list)
+        cmd_list
+        ;;
+    check)
+        if [[ $# -lt 1 ]]; then
+            echo "Usage: work-queue.sh check <slug>" >&2
+            exit 1
+        fi
+        cmd_check "$1"
+        ;;
+    claimed-by-me)
+        cmd_claimed_by_me
+        ;;
+    expire)
+        cmd_expire
+        ;;
+    inflight-tasks)
+        cmd_inflight_tasks
+        ;;
+    max-claimed-version)
+        cmd_max_claimed_version
+        ;;
+    validate)
+        cmd_validate
+        ;;
+    help|--help|-h)
+        echo "Usage: work-queue.sh <command> [args]"
+        echo ""
+        echo "Commands:"
+        echo "  init                          Initialize the work queue directory"
+        echo "  claim <slug> [title] [section] [role] [version]  Claim a task"
+        echo "  release <slug> [--force]      Release a claimed task"
+        echo "  release-all                   Release all claims for this worktree"
+        echo "  list                          List all active claims (JSON)"
+        echo "  check <slug>                  Check if a task is claimed"
+        echo "  claimed-by-me                 List tasks claimed by this worktree"
+        echo "  expire                        Remove claims past TTL"
+        echo "  inflight-tasks                List tasks completed in open PRs (JSON)"
+        echo "  max-claimed-version           Show highest speculated version across claims"
+        echo "  validate                      Health check: detect slug mismatches, duplicates, orphans, expired"
+        echo ""
+        echo "Current worktree: ${WORKTREE_NAME}"
+        echo "Queue dir: ${QUEUE_DIR}"
+        ;;
+    *)
+        echo "Unknown command: $CMD" >&2
+        echo "Run 'work-queue.sh help' for usage." >&2
+        exit 1
+        ;;
+esac

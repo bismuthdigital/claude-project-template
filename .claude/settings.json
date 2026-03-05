@@ -1,0 +1,124 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Glob",
+      "Grep",
+      "WebSearch",
+      "WebFetch(domain:docs.python.org)",
+      "WebFetch(domain:pypi.org)",
+      "WebFetch(domain:peps.python.org)",
+      "WebFetch(domain:packaging.python.org)",
+      "WebFetch(domain:typing.readthedocs.io)",
+      "WebFetch(domain:ruff.rs)",
+      "WebFetch(domain:docs.astral.sh)",
+      "WebFetch(domain:pytest.org)",
+      "WebFetch(domain:docs.pytest.org)",
+      "WebFetch(domain:mypy.readthedocs.io)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:stackoverflow.com)",
+      "Edit(**.py)",
+      "Edit(.claude/**)",
+      "Write(**.py)",
+      "Write(.claude/**)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(pip install -e *)",
+      "Bash(uv *)",
+      "Bash(pytest)",
+      "Bash(pytest *)",
+      "Bash(.venv/bin/pytest)",
+      "Bash(.venv/bin/pytest *)",
+      "Bash(python -m pytest *)",
+      "Bash(python3 -m pytest *)",
+      "Bash(ruff check *)",
+      "Bash(ruff format *)",
+      "Bash(ruff *)",
+      "Bash(.venv/bin/ruff *)",
+      "Bash(black *)",
+      "Bash(.venv/bin/black *)",
+      "Bash(mypy *)",
+      "Bash(.venv/bin/mypy *)",
+      "Bash(git status)",
+      "Bash(git status *)",
+      "Bash(git diff)",
+      "Bash(git diff *)",
+      "Bash(git log)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git checkout *)",
+      "Bash(git switch *)",
+      "Bash(git clone *)",
+      "Bash(git init)",
+      "Bash(git push *)",
+      "Bash(git fetch)",
+      "Bash(git fetch *)",
+      "Bash(git pull)",
+      "Bash(git pull *)",
+      "Bash(git worktree *)",
+      "Bash(gh pr *)",
+      "Bash(gh auth *)",
+      "Bash(gh api *)",
+      "Bash(gh repo *)",
+      "Bash(tar *)",
+      "Bash(cd * && git fetch * && git pull *)",
+      "Bash(cd * && git *)",
+      "Bash(git tag *)",
+      "Bash(git rev-list *)",
+      "Bash(curl *)",
+      "Bash(mktemp *)",
+      "Bash(ls * | *)",
+      "Bash(ls *)",
+      "Bash(ls)",
+      "Bash(mkdir *)",
+      "Bash(source *)",
+      "Bash(. .venv/bin/activate *)",
+      "Bash(chmod +x *)"
+    ],
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/secrets/**)",
+      "Read(**/*credentials*)",
+      "Read(**/*_key*)",
+      "Read(**/*.pem)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)",
+      "Bash(rm -rf *)",
+      "Bash(sudo *)",
+      "Bash(curl * | *)",
+      "Bash(wget * | *)"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-format.sh\"",
+            "timeout": 60,
+            "statusMessage": "Running linters and formatters..."
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/config-suggest.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

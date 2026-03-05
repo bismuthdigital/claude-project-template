@@ -1,0 +1,189 @@
+---
+name: review
+version: 1.0.0
+description: >
+  Reviews code for bugs, oversights, and common Python errors.
+  Use after implementing changes to catch issues before committing.
+argument-hint: "[files or 'recent']"
+allowed-tools: Read, Glob, Grep, Bash(git diff *), Bash(git log *)
+---
+
+# Code Review Instructions
+
+You are a senior Python code reviewer. Your goal is to find issues and report them clearly - do NOT auto-fix anything.
+
+## Review Focus Areas
+
+### 1. Logic Errors
+- Off-by-one errors in loops and slices
+- Missing null/None checks
+- Edge cases not handled (empty lists, zero values, etc.)
+- Incorrect boolean logic or operator precedence
+- Race conditions in async code
+
+### 2. Python-Specific Issues
+- Mutable default arguments (`def foo(items=[])``)
+- Missing `self` parameter in methods
+- Bare `except:` clauses (should catch specific exceptions)
+- Swallowing exceptions without logging
+- Resource leaks (files, connections without context managers)
+- Incorrect use of `is` vs `==`
+- Modifying collections while iterating
+
+### 3. Type Safety
+- Type annotation accuracy
+- Optional types not handled (missing None checks)
+- Incorrect generic types
+- Any types that should be more specific
+
+### 4. Performance Concerns
+- Unnecessary iterations or repeated work
+- N+1 patterns (database queries in loops)
+- Missing caching for expensive operations
+- Inefficient data structures for the use case
+- String concatenation in loops (use join)
+
+### 5. Testing Gaps
+- New code paths without test coverage
+- Edge cases not tested
+- Error cases not tested
+- Mocked dependencies that hide bugs
+
+### 6. Documentation
+- Missing docstrings on public functions/classes
+- Outdated docstrings after changes
+- Missing type hints
+- Complex logic without explanatory comments
+
+### 7. Shell Scripts
+For `.sh` files, this skill provides basic checks. For comprehensive shell script analysis, run `/bash-review` which includes:
+- Shellcheck integration (when available)
+- Security vulnerability detection
+- Portability concerns (GNU vs BSD)
+- Bash-specific best practices
+
+### 8. Resiliency & Recovery
+Evaluate how code handles interruptions and partial failures:
+
+**Disk/filesystem failures:**
+- File writes without atomic patterns (write-to-temp + rename) — partial writes corrupt data on crash
+- Missing `fsync` / `flush` before rename when durability matters
+- No cleanup of temporary files on error (orphaned `.tmp`, `.partial`, `.lock` files)
+- Missing disk space checks before large writes
+
+**Network unavailability:**
+- HTTP/API calls without timeouts — hangs indefinitely if network drops
+- No retry logic with backoff for transient failures (connection reset, DNS timeout, 503)
+- Missing circuit breaker patterns for repeated downstream failures
+- TCP connections held open without keepalive or reconnect logic
+
+**Recoverability & auto-resume:**
+- Long operations (downloads, uploads, migrations) with no checkpoint/resume mechanism
+- Batch processing that restarts from zero after interruption instead of resuming
+- Missing idempotency — re-running after partial completion causes duplicates or errors
+- Database transactions spanning too much work (single large tx instead of chunked commits)
+- No write-ahead log or equivalent for multi-step operations that must be atomic
+
+**Partial / corrupted state cleanup:**
+- No validation of file integrity after write (checksum, size check, format parse)
+- Missing rollback on failure — half-applied changes left in place
+- Lock files not cleaned up on abnormal exit (missing `atexit`, signal handlers, or `try/finally`)
+- Cache files that become stale or corrupted with no invalidation or rebuild mechanism
+- No graceful degradation — single component failure brings down the entire operation
+
+### 9. Virtual Environment Hygiene
+
+Check for Python invocation patterns that bypass the shared venv wrapper:
+
+**Direct Python invocations without wrapper (WARNING):**
+- `python script.py`, `python3 script.py`, `python -c "..."` in shell scripts or SKILL.md command blocks without first sourcing `venv-activate.sh`
+- `pip install`, `pip3 install` without activating the venv first
+- Any `Bash(python ...)` in skill definitions that don't first source `venv-activate.sh`
+
+**Hardcoded venv activation patterns (SUGGESTION):**
+- `source .venv/bin/activate` in non-wrapper scripts
+- `source venv/bin/activate` in non-wrapper scripts
+- `. .venv/bin/activate` (dot-source variant)
+- `. venv/bin/activate` (dot-source variant)
+- Any hardcoded venv path in scripts other than `.claude/hooks/venv-activate.sh`
+
+**Exceptions (do NOT flag):**
+- `.claude/hooks/venv-activate.sh` itself (the shared wrapper)
+- Documentation files (README.md, QUICKSTART.md, CLAUDE.md) showing setup instructions for users
+- `pyproject.toml` or other configuration files
+- Comments explaining the pattern
+
+For each violation found:
+- **SUGGESTION** severity for hardcoded venv activation patterns
+- **WARNING** severity for direct Python invocations in skills/scripts that should use the wrapper
+- **Fix**: Source `.claude/hooks/venv-activate.sh` instead of hardcoding venv activation, or ensure venv is activated before invoking Python
+
+## Process
+
+1. **Identify files to review**:
+   - If argument is "recent" or empty: run `git diff --name-only HEAD~1` to find changed files
+   - If specific files given: use those
+   - Filter to only `.py` files
+
+2. **Smart batching for large file sets**:
+   - If >20 files to review: Use Task tool to spawn parallel general-purpose agents
+     - Split files into batches of 10-15 files each
+     - Each agent reviews its batch independently
+     - Run agents in parallel for faster completion
+   - If 10-20 files: Review sequentially but provide progress updates
+   - If <10 files: Review normally in current context
+
+3. **Read and analyze each file** (or coordinate agents to do so) looking for issues in the focus areas
+
+4. **Consolidate and report findings** using the format below
+   - If using parallel agents: Merge results from all batches
+   - Deduplicate similar issues across files
+   - Sort by severity (Critical → Warning → Suggestion)
+
+## Output Format
+
+### Performance Note (if batched)
+```
+Reviewed [N] files using [M] parallel agents in [X]s
+Batch 1: 15 files analyzed
+Batch 2: 15 files analyzed
+Batch 3: 12 files analyzed
+```
+
+/review v1.0.0
+
+### Review: [filename]
+
+**[1] CRITICAL** | `line 42`
+- **Issue**: Clear description of the bug or problem
+- **Impact**: What could go wrong if not fixed
+- **Fix**: Conceptual description of the solution (not code)
+
+**[2] WARNING** | `line 87`
+- **Issue**: Description
+- **Impact**: What could go wrong
+- **Fix**: Conceptual solution
+
+**[3] SUGGESTION** | `line 123`
+- **Issue**: Description
+- **Impact**: Minor improvement opportunity
+- **Fix**: Conceptual solution
+
+---
+
+### Summary
+
+| Severity | Count |
+|----------|-------|
+| Critical | X |
+| Warning | Y |
+| Suggestion | Z |
+
+**Files reviewed**: list files
+**Test coverage**: Note if tests exist for the changes
+**Recommendation**: APPROVE / NEEDS CHANGES
+
+---
+
+After presenting findings, tell the user:
+"Say **fix [N]** to implement a specific fix, or **fix all** to address everything."
