@@ -6,7 +6,7 @@
 # automatically from any worktree.
 #
 # Usage:
-#   work-queue.sh claim  <slug> <title> <section> <role_tag> [version]  # Claim a task
+#   work-queue.sh claim  <slug> <title> <section> <role_tag> [version] [purpose]  # Claim a task
 #   work-queue.sh release <slug>                               # Release a claim
 #   work-queue.sh release-all                                  # Release all claims for this worktree
 #   work-queue.sh list                                         # List all active claims
@@ -14,9 +14,16 @@
 #   work-queue.sh claimed-by-me                                # List tasks claimed by this worktree
 #   work-queue.sh expire                                       # Remove stale claims past TTL
 #   work-queue.sh init                                         # Ensure queue directory exists
-#   work-queue.sh inflight-tasks                               # List tasks completed in open PRs (JSON)
+#   work-queue.sh inflight-tasks                               # List tasks completed in open PRs (not yet merged)
 #   work-queue.sh max-claimed-version                          # Show highest speculated version across all claims
 #   work-queue.sh validate                                     # Health check: detect claim issues
+#   work-queue.sh mark-shipped <pr_number> <pr_url>            # Transition this worktree's claims to shipped
+#   work-queue.sh auto-release-merged                          # Release shipped claims whose PRs are merged/closed
+#   work-queue.sh try-claim <count> <json_file>                # Try claiming tasks from a candidates file
+#   work-queue.sh mark-reviewed <slug> [sha]                   # Record that a task has been reviewed
+#   work-queue.sh is-reviewed <slug>                           # Check if a task has been reviewed
+#   work-queue.sh list-reviewed                                # List all reviewed tasks
+#   work-queue.sh clean-review <slug>                          # Delete review file and reviewed marker
 
 set -euo pipefail
 
@@ -74,6 +81,8 @@ fi
 # Queue directory lives in the main repo (shared across all worktrees)
 QUEUE_DIR="${MAIN_REPO}/.claude/work-queue"
 CLAIMS_DIR="${QUEUE_DIR}/claims"
+REVIEWED_DIR="${QUEUE_DIR}/reviewed"
+REVIEWS_DIR="${MAIN_REPO}/.claude/reviews"
 CONFIG_FILE="${QUEUE_DIR}/config.json"
 
 # Default TTL in minutes
@@ -209,6 +218,7 @@ _find_claim_by_title() {
 
 cmd_init() {
     mkdir -p "$CLAIMS_DIR"
+    mkdir -p "$REVIEWED_DIR"
     if [[ ! -f "$CONFIG_FILE" ]]; then
         cat > "$CONFIG_FILE" << 'CONF'
 {
@@ -227,6 +237,7 @@ cmd_claim() {
     local section="${3:-}"
     local role_tag="${4:-}"
     local version="${5:-}"
+    local purpose="${6:-}"
 
     mkdir -p "$CLAIMS_DIR"
 
@@ -274,6 +285,15 @@ cmd_claim() {
             return 0
         fi
 
+        # Shipped claims are in the merge queue — not reclaimable by TTL
+        local state
+        state=$(python3 -c "import json; print(json.load(open('$claim_file')).get('state', 'claimed'))" 2>/dev/null) || true
+        if [[ "$state" == "shipped" ]]; then
+            _release_lock
+            echo "SHIPPED_BY:${owner}"
+            return 1
+        fi
+
         # Check if the claim is expired
         local age
         age=$(file_age_minutes "$claim_file")
@@ -303,7 +323,8 @@ claim = {
     'agent_worktree': '${WORKTREE_NAME}',
     'claimed_at': '$(now_iso)',
     'ttl_minutes': ${ttl},
-    'speculated_version': '${version}' if '${version}' else None
+    'speculated_version': '${version}' if '${version}' else None,
+    'purpose': '${purpose}' if '${purpose}' else None
 }
 with open('${tmp_file}', 'w') as f:
     json.dump(claim, f, indent=2)
@@ -368,6 +389,79 @@ cmd_release_all() {
     echo "RELEASED:${count}"
 }
 
+cmd_mark_shipped() {
+    local pr_number="$1"
+    local pr_url="$2"
+    mkdir -p "$CLAIMS_DIR"
+    local count=0
+
+    for claim_file in "$CLAIMS_DIR"/*.json; do
+        [[ -f "$claim_file" ]] || continue
+        local owner
+        owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])" 2>/dev/null) || continue
+        [[ "$owner" == "$WORKTREE_NAME" ]] || continue
+
+        local slug
+        slug=$(basename "$claim_file" .json)
+        if ! _acquire_lock "$slug"; then
+            echo "LOCK_FAILED:${slug}" >&2
+            continue
+        fi
+
+        local tmp_file="${CLAIMS_DIR}/${slug}.tmp.$$"
+        python3 -c "
+import json
+with open('${claim_file}') as f:
+    claim = json.load(f)
+claim['state'] = 'shipped'
+claim['pr_number'] = ${pr_number}
+claim['pr_url'] = '${pr_url}'
+claim['shipped_at'] = '$(now_iso)'
+with open('${tmp_file}', 'w') as f:
+    json.dump(claim, f, indent=2)
+"
+        mv -f "$tmp_file" "$claim_file"
+        _release_lock
+        echo "SHIPPED:${slug}"
+        count=$((count + 1))
+    done
+    echo "TOTAL_SHIPPED:${count}"
+}
+
+cmd_auto_release_merged() {
+    mkdir -p "$CLAIMS_DIR"
+    if ! command -v gh &>/dev/null; then
+        echo "SKIPPED"
+        return 0
+    fi
+
+    local count=0
+    for claim_file in "$CLAIMS_DIR"/*.json; do
+        [[ -f "$claim_file" ]] || continue
+
+        local state
+        state=$(python3 -c "import json; print(json.load(open('$claim_file')).get('state', 'claimed'))" 2>/dev/null) || continue
+        [[ "$state" == "shipped" ]] || continue
+
+        local pr_number
+        pr_number=$(python3 -c "import json; print(json.load(open('$claim_file')).get('pr_number', ''))" 2>/dev/null) || continue
+        [[ -n "$pr_number" ]] || continue
+
+        local pr_state
+        pr_state=$(gh pr view "$pr_number" --json state --jq '.state' 2>/dev/null) || continue
+
+        if [[ "$pr_state" == "MERGED" || "$pr_state" == "CLOSED" ]]; then
+            local slug
+            slug=$(basename "$claim_file" .json)
+            rm -f "$claim_file"
+            rm -rf "${CLAIMS_DIR}/${slug}.lock"
+            echo "RELEASED:${slug}:${pr_state}"
+            count=$((count + 1))
+        fi
+    done
+    echo "TOTAL_RELEASED:${count}"
+}
+
 cmd_list() {
     mkdir -p "$CLAIMS_DIR"
     local ttl
@@ -380,8 +474,10 @@ cmd_list() {
         [[ -f "$claim_file" ]] || continue
         local age
         age=$(file_age_minutes "$claim_file")
+        local state
+        state=$(python3 -c "import json; print(json.load(open('$claim_file')).get('state', 'claimed'))" 2>/dev/null) || true
         local expired="false"
-        if (( age > ttl )); then
+        if [[ "$state" != "shipped" ]] && (( age > ttl )); then
             expired="true"
         fi
 
@@ -396,6 +492,7 @@ cmd_list() {
 import json
 with open('$claim_file') as f:
     claim = json.load(f)
+claim['state'] = claim.get('state', 'claimed')
 claim['age_minutes'] = $age
 claim['expired'] = $(if [[ "$expired" == "true" ]]; then echo "True"; else echo "False"; fi)
 print('    ' + json.dumps(claim), end='')
@@ -418,6 +515,16 @@ cmd_check() {
         return 0
     fi
 
+    local owner
+    owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])")
+
+    local state
+    state=$(python3 -c "import json; print(json.load(open('$claim_file')).get('state', 'claimed'))" 2>/dev/null) || true
+    if [[ "$state" == "shipped" ]]; then
+        echo "SHIPPED_BY:${owner}"
+        return 0
+    fi
+
     local age
     age=$(file_age_minutes "$claim_file")
     local ttl
@@ -428,8 +535,6 @@ cmd_check() {
         return 0
     fi
 
-    local owner
-    owner=$(python3 -c "import json; print(json.load(open('$claim_file'))['agent_worktree'])")
     echo "CLAIMED_BY:${owner}"
     return 0
 }
@@ -467,6 +572,14 @@ cmd_expire() {
 
     for claim_file in "$CLAIMS_DIR"/*.json; do
         [[ -f "$claim_file" ]] || continue
+
+        # Shipped claims are released by auto-release-merged, not TTL
+        local state
+        state=$(python3 -c "import json; print(json.load(open('$claim_file')).get('state', 'claimed'))" 2>/dev/null) || true
+        if [[ "$state" == "shipped" ]]; then
+            continue
+        fi
+
         local age
         age=$(file_age_minutes "$claim_file")
         if (( age > ttl )); then
@@ -485,6 +598,9 @@ cmd_expire() {
 cmd_inflight_tasks() {
     # Query GitHub for open PRs and extract task titles being marked complete.
     # Returns a JSON array of task title strings.
+    # Detects both:
+    #   1. Legacy: [x] marks in NEXT-STEPS.md diffs
+    #   2. Per-task files: moves from next-steps/active/ to next-steps/completed/
     # Gracefully degrades to [] if gh CLI is unavailable or fails.
 
     if ! command -v gh &>/dev/null; then
@@ -513,20 +629,53 @@ cmd_inflight_tasks() {
         local diff
         diff=$(gh pr diff "$pr_num" 2>/dev/null) || continue
 
-        # Extract lines that are additions (+) marking tasks as complete [x] with bold title
-        # Pattern: +- [x] **[role] Task title** or +- [x] **Task title**
-        # Uses Python regex to handle: multi-word role tags, special chars, em-dash/double-hyphen
+        # Extract task titles from diff using two detection methods:
+        # 1. Legacy [x] marks in NEXT-STEPS.md
+        # 2. Task file moves: files deleted from next-steps/active/ (renamed to completed/)
+        #    Title extracted from the "# Title" heading in the file content within the diff
         local titles
         titles=$(echo "$diff" | python3 -c "
 import re, sys
-for line in sys.stdin:
-    m = re.match(r'^\+\s*-\s*\[x\]\s*\*\*(?:\[[^\]]*\]\s*)?(.+?)\*\*', line)
+
+titles = set()
+lines = sys.stdin.readlines()
+
+for line in lines:
+    # Method 1: Legacy [x] marks in NEXT-STEPS.md
+    m = re.match(r'^\+\s*-\s*\[x\]\s*\*\*(?:\[[^\]]*\]\s*)?(.+?)\*\*\s*(?:T\d{3,}\s*)?', line)
     if m:
         title = m.group(1).strip()
-        # Strip trailing description (em-dash or double-hyphen separator)
         title = re.split(r'\s*[—]\s*|\s+--\s+', title)[0].strip()
         if title:
-            print(title)
+            titles.add(title)
+
+# Method 2: Task file moves (active/ -> completed/)
+# Look for files being removed from next-steps/active/
+# The title is in the '# Title' heading line within the deleted content
+current_is_active_file = False
+for line in lines:
+    # Detect rename from active/ or deletion of active/ file
+    if re.match(r'^rename from next-steps/active/', line):
+        current_is_active_file = True
+        continue
+    if re.match(r'^--- a/next-steps/active/', line):
+        current_is_active_file = True
+        continue
+    # Reset on new diff section
+    if line.startswith('diff --git'):
+        current_is_active_file = False
+        continue
+    # Extract title from heading in the deleted file content
+    if current_is_active_file:
+        # In a rename, content lines are prefixed with space (context) or -/+
+        # In a delete, content lines are prefixed with -
+        heading = re.match(r'^[-  ]# (.+)', line)
+        if heading:
+            titles.add(heading.group(1).strip())
+            current_is_active_file = False
+
+for t in sorted(titles):
+    print(t)
 ") || true
 
         if [[ -n "$titles" ]]; then
@@ -636,21 +785,35 @@ for fname in sorted(os.listdir(claims_dir)):
             'title': title
         })
 
-    # Check expired
-    try:
-        mtime = os.path.getmtime(fpath)
-        age_min = (time.time() - mtime) / 60
-        if age_min > ttl:
-            issues.append({
-                'type': 'expired',
-                'file': fname,
-                'age_minutes': int(age_min),
-                'ttl_minutes': ttl,
-                'owner': owner,
-                'title': title
-            })
-    except OSError:
-        pass
+    # Check shipped claims have required fields
+    state = claim.get('state', 'claimed')
+    if state == 'shipped':
+        for field in ('pr_number', 'pr_url', 'shipped_at'):
+            if not claim.get(field):
+                issues.append({
+                    'type': 'shipped_missing_field',
+                    'file': fname,
+                    'field': field,
+                    'owner': owner,
+                    'title': title
+                })
+
+    # Check expired (skip shipped claims — they are released by auto-release-merged)
+    if state != 'shipped':
+        try:
+            mtime = os.path.getmtime(fpath)
+            age_min = (time.time() - mtime) / 60
+            if age_min > ttl:
+                issues.append({
+                    'type': 'expired',
+                    'file': fname,
+                    'age_minutes': int(age_min),
+                    'ttl_minutes': ttl,
+                    'owner': owner,
+                    'title': title
+                })
+        except OSError:
+            pass
 
 # Check duplicate titles
 for title, entries in claims_by_title.items():
@@ -690,12 +853,14 @@ for fname in sorted(os.listdir(claims_dir)):
         continue
     fpath = os.path.join(claims_dir, fname)
     try:
-        # Skip expired claims
-        mtime = os.path.getmtime(fpath)
-        if (now - mtime) > ttl_seconds:
-            continue
         with open(fpath) as f:
             claim = json.load(f)
+        # Shipped claims are still active; only skip expired non-shipped claims
+        state = claim.get('state', 'claimed')
+        if state != 'shipped':
+            mtime = os.path.getmtime(fpath)
+            if (now - mtime) > ttl_seconds:
+                continue
         v = claim.get('speculated_version')
         if v:
             versions.append(v)
@@ -716,6 +881,184 @@ print(versions[-1])
 "
 }
 
+cmd_try_claim() {
+    # Try claiming tasks from a JSON candidate list until <count> succeed.
+    # Avoids the need for agents to write inline bash loops.
+    #
+    # Usage: work-queue.sh try-claim <count> <json_file>
+    #   json_file: path to a JSON array of candidate tasks, or "-" for stdin
+    #   Each element: {"title": "...", "section": "...", "role_tag": "...", "version": "...", "purpose": "..."}
+    #   "title" is required; all other fields are optional.
+    #
+    # Output: JSON object with "claimed" and "skipped" arrays, plus "wanted" and "got" counts.
+
+    local count="${1:-1}"
+    local json_file="${2:--}"
+
+    # Read candidates from file or stdin into a temp file for Python
+    local tmp_input=""
+    if [[ "$json_file" == "-" ]]; then
+        tmp_input=$(mktemp "${TMPDIR:-/tmp}/wq-try-claim.XXXXXX")
+        cat > "$tmp_input"
+        json_file="$tmp_input"
+    fi
+
+    if [[ ! -f "$json_file" ]]; then
+        echo "Error: candidates file not found: $json_file" >&2
+        exit 1
+    fi
+
+    local script_path
+    script_path=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/$(basename "${BASH_SOURCE[0]}")
+
+    python3 -c "
+import json, subprocess, sys, os
+
+with open(sys.argv[1]) as f:
+    candidates = json.load(f)
+
+count = int(sys.argv[2])
+script = sys.argv[3]
+worktree = sys.argv[4]
+claimed = []
+skipped = []
+
+for task in candidates:
+    if len(claimed) >= count:
+        break
+
+    title = task.get('title', '')
+    if not title:
+        skipped.append({'title': '(empty)', 'status': 'INVALID_NO_TITLE'})
+        continue
+
+    slug = task.get('slug', 'placeholder')
+    section = task.get('section', '')
+    role_tag = task.get('role_tag', '')
+    version = task.get('version', '')
+    purpose = task.get('purpose', '')
+
+    result = subprocess.run(
+        [script, 'claim', slug, title, section, role_tag, version, purpose],
+        capture_output=True, text=True,
+        env={**os.environ, 'WORK_QUEUE_WORKTREE': worktree}
+    )
+
+    # Last non-empty line of stdout is the status
+    lines = [l for l in result.stdout.strip().split('\n') if l.strip()]
+    status = lines[-1] if lines else 'ERROR'
+
+    if status in ('CLAIMED', 'EXPIRED_RECLAIMED', 'ALREADY_OWNED'):
+        claimed.append({
+            'title': title,
+            'section': section,
+            'role_tag': role_tag,
+            'status': status
+        })
+    else:
+        skipped.append({
+            'title': title,
+            'status': status
+        })
+
+output = {
+    'claimed': claimed,
+    'skipped': skipped,
+    'wanted': count,
+    'got': len(claimed)
+}
+print(json.dumps(output, indent=2))
+" "$json_file" "$count" "$script_path" "$WORKTREE_NAME"
+
+    # Clean up temp file
+    if [[ -n "$tmp_input" ]]; then
+        rm -f "$tmp_input"
+    fi
+}
+
+cmd_mark_reviewed() {
+    local slug="$1"
+    local sha="${2:-}"
+    mkdir -p "$REVIEWED_DIR"
+
+    # Resolve SHA if not provided
+    if [[ -z "$sha" ]]; then
+        sha=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    fi
+
+    local marker_file="${REVIEWED_DIR}/${slug}.json"
+    local tmp_file="${REVIEWED_DIR}/${slug}.tmp.$$"
+    python3 -c "
+import json
+marker = {
+    'task_slug': '${slug}',
+    'reviewed_by': '${WORKTREE_NAME}',
+    'reviewed_at': '$(now_iso)',
+    'reviewed_sha': '${sha}'
+}
+with open('${tmp_file}', 'w') as f:
+    json.dump(marker, f, indent=2)
+"
+    mv -f "$tmp_file" "$marker_file"
+    echo "MARKED_REVIEWED"
+    return 0
+}
+
+cmd_is_reviewed() {
+    local slug="$1"
+    local marker_file="${REVIEWED_DIR}/${slug}.json"
+
+    if [[ -f "$marker_file" ]]; then
+        local reviewer
+        reviewer=$(python3 -c "import json; print(json.load(open('$marker_file'))['reviewed_by'])" 2>/dev/null) || true
+        echo "REVIEWED_BY:${reviewer}"
+        return 0
+    fi
+
+    echo "NOT_REVIEWED"
+    return 0
+}
+
+cmd_list_reviewed() {
+    mkdir -p "$REVIEWED_DIR"
+    echo "["
+    local first=true
+    for marker_file in "$REVIEWED_DIR"/*.json; do
+        [[ -f "$marker_file" ]] || continue
+        if [[ "$first" == "true" ]]; then
+            first=false
+        else
+            echo ","
+        fi
+        python3 -c "
+import json
+with open('$marker_file') as f:
+    print('  ' + json.dumps(json.load(f)), end='')
+"
+    done
+    echo ""
+    echo "]"
+}
+
+cmd_clean_review() {
+    local slug="$1"
+    local count=0
+
+    local review_file="${REVIEWS_DIR}/${slug}.md"
+    if [[ -f "$review_file" ]]; then
+        rm -f "$review_file"
+        count=$((count + 1))
+    fi
+
+    local marker_file="${REVIEWED_DIR}/${slug}.json"
+    if [[ -f "$marker_file" ]]; then
+        rm -f "$marker_file"
+        count=$((count + 1))
+    fi
+
+    echo "CLEANED:${count}"
+}
+
 # --- Main dispatch ---
 
 CMD="${1:-help}"
@@ -727,10 +1070,10 @@ case "$CMD" in
         ;;
     claim)
         if [[ $# -lt 1 ]]; then
-            echo "Usage: work-queue.sh claim <slug> [title] [section] [role_tag] [version]" >&2
+            echo "Usage: work-queue.sh claim <slug> [title] [section] [role_tag] [version] [purpose]" >&2
             exit 1
         fi
-        cmd_claim "${1:-}" "${2:-}" "${3:-}" "${4:-}" "${5:-}"
+        cmd_claim "${1:-}" "${2:-}" "${3:-}" "${4:-}" "${5:-}" "${6:-}"
         ;;
     release)
         if [[ $# -lt 1 ]]; then
@@ -741,6 +1084,16 @@ case "$CMD" in
         ;;
     release-all)
         cmd_release_all
+        ;;
+    mark-shipped)
+        if [[ $# -lt 2 ]]; then
+            echo "Usage: work-queue.sh mark-shipped <pr_number> <pr_url>" >&2
+            exit 1
+        fi
+        cmd_mark_shipped "$1" "$2"
+        ;;
+    auto-release-merged)
+        cmd_auto_release_merged
         ;;
     list)
         cmd_list
@@ -767,14 +1120,43 @@ case "$CMD" in
     validate)
         cmd_validate
         ;;
+    try-claim)
+        cmd_try_claim "${1:-1}" "${2:--}"
+        ;;
+    mark-reviewed)
+        if [[ $# -lt 1 ]]; then
+            echo "Usage: work-queue.sh mark-reviewed <slug> [sha]" >&2
+            exit 1
+        fi
+        cmd_mark_reviewed "$1" "${2:-}"
+        ;;
+    is-reviewed)
+        if [[ $# -lt 1 ]]; then
+            echo "Usage: work-queue.sh is-reviewed <slug>" >&2
+            exit 1
+        fi
+        cmd_is_reviewed "$1"
+        ;;
+    list-reviewed)
+        cmd_list_reviewed
+        ;;
+    clean-review)
+        if [[ $# -lt 1 ]]; then
+            echo "Usage: work-queue.sh clean-review <slug>" >&2
+            exit 1
+        fi
+        cmd_clean_review "$1"
+        ;;
     help|--help|-h)
         echo "Usage: work-queue.sh <command> [args]"
         echo ""
         echo "Commands:"
         echo "  init                          Initialize the work queue directory"
-        echo "  claim <slug> [title] [section] [role] [version]  Claim a task"
+        echo "  claim <slug> [title] [section] [role] [version] [purpose]  Claim a task"
         echo "  release <slug> [--force]      Release a claimed task"
         echo "  release-all                   Release all claims for this worktree"
+        echo "  mark-shipped <pr> <url>       Transition this worktree's claims to shipped"
+        echo "  auto-release-merged           Release shipped claims whose PRs are merged/closed"
         echo "  list                          List all active claims (JSON)"
         echo "  check <slug>                  Check if a task is claimed"
         echo "  claimed-by-me                 List tasks claimed by this worktree"
@@ -782,6 +1164,11 @@ case "$CMD" in
         echo "  inflight-tasks                List tasks completed in open PRs (JSON)"
         echo "  max-claimed-version           Show highest speculated version across claims"
         echo "  validate                      Health check: detect slug mismatches, duplicates, orphans, expired"
+        echo "  try-claim <count> <json_file> Try claiming tasks from a candidates file (or - for stdin)"
+        echo "  mark-reviewed <slug> [sha]    Record that a task has been reviewed"
+        echo "  is-reviewed <slug>            Check if a task has been reviewed"
+        echo "  list-reviewed                 List all reviewed tasks (JSON)"
+        echo "  clean-review <slug>           Delete review file and reviewed marker for a task"
         echo ""
         echo "Current worktree: ${WORKTREE_NAME}"
         echo "Queue dir: ${QUEUE_DIR}"
