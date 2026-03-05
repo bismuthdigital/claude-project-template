@@ -1,11 +1,10 @@
 ---
 name: ship
-version: 1.2.0
 description: >
   Commits changes, creates a PR, merges it, and syncs the local repo.
   Complete workflow from worktree changes to running code in one command.
 argument-hint: "[commit message or empty for auto-generated]"
-allowed-tools: Read, Glob, Grep, Edit, Bash(git *), Bash(gh *), Bash(cd * && git *), Bash(*/work-queue.sh *), Bash(source *), Bash(ruff *), Bash(mypy *), Bash(pytest *), Skill
+allowed-tools: Read, Glob, Grep, Edit, Bash(git *), Bash(gh *), Bash(cd * && git *), Bash(*/work-queue.sh *), Bash(*/task-format.py *), Bash(source *), Bash(ruff *), Bash(mypy *), Bash(pytest *), Skill
 ---
 
 # Ship Changes to Main
@@ -14,13 +13,14 @@ Complete workflow to ship changes from a worktree to the main branch and sync th
 
 ## What This Skill Does
 
-1. **Commit** - Stage and commit all changes with a descriptive message
-2. **Version** - Bump the semantic version by invoking the `/version` skill
-3. **Rebase** - Rebase onto latest main, resolving conflicts intelligently
-4. **Push** - Push the branch to GitHub
-5. **Create PR** - Open a pull request with summary and test plan
-6. **Merge** - Squash merge the PR into main
-7. **Sync Local** - Fetch and pull changes in the local (non-worktree) directory
+1. **Detect** - Find claimed tasks and build context
+2. **Commit** - Stage and commit all changes with a descriptive message
+3. **Version** - Bump the semantic version by invoking the `/version` skill
+4. **Rebase** - Rebase onto latest main, resolving conflicts intelligently
+5. **Push** - Push the branch to GitHub
+6. **Create PR** - Open a pull request with summary, test plan, and technical reviews
+7. **Merge** - Squash merge the PR into main (or enable auto-merge for merge queues)
+8. **Sync Local** - Fetch and pull changes in the local (non-worktree) directory
 
 ## Configuration
 
@@ -30,7 +30,8 @@ This skill reads from `.claude/ship.json` for project-specific settings:
 {
   "localPath": "/path/to/your/repo",
   "defaultBase": "main",
-  "mergeMethod": "squash"
+  "mergeMethod": "squash",
+  "mergeQueue": false
 }
 ```
 
@@ -39,6 +40,7 @@ This skill reads from `.claude/ship.json` for project-specific settings:
 | `localPath` | Path to local repo (where code runs) | Auto-detect from worktree |
 | `defaultBase` | Base branch for PRs | `main` |
 | `mergeMethod` | PR merge method: `squash`, `merge`, `rebase` | `squash` |
+| `mergeQueue` | If `true`, use `gh pr merge --auto` instead of waiting for checks | `false` |
 
 If `localPath` is not configured, the skill auto-detects it from `git worktree list` (uses the main worktree path).
 
@@ -64,6 +66,19 @@ git status --porcelain
 If no changes exist, inform the user and exit.
 
 **Worktree safety:** If the user has uncommitted changes they want to set aside temporarily, never suggest `git stash` — stashes are shared across all worktrees and can be accidentally popped in the wrong worktree. Recommend committing as a WIP commit instead.
+
+### Step 1a: Detect Claimed Tasks
+
+Check if the work queue has claims for this worktree:
+
+```bash
+scripts/work-queue.sh claimed-by-me
+```
+
+If claims exist, use them to:
+- Build context for the commit message and PR description
+- Determine which task checkboxes to mark as complete
+- Include task metadata in the PR body
 
 ### Step 2: Determine Local Path
 
@@ -101,6 +116,12 @@ A commit is **docs-only** if every changed file matches one of these patterns:
 - `LICENSE*`, `NOTICE*`, `.gitignore`, `.github/CODEOWNERS`
 
 If **any** file falls outside these patterns (e.g. `.py`, `.yml`, `pyproject.toml`, `requirements*.txt`), the commit is **not** docs-only and requires full CI.
+
+**Unstage generated files**: If per-task file mode is active, unstage rendered files that shouldn't be committed:
+
+```bash
+git reset HEAD NEXT-STEPS.md NEXT-STEPS-COMPLETED.md .tasks.json 2>/dev/null || true
+```
 
 ### Step 3a: CI Parity Checks (code changes only)
 
@@ -219,7 +240,7 @@ If the rebase stops with conflicts, `git status` will show unmerged paths. For *
 
 | File Pattern | Strategy | Details |
 |-------------|----------|---------|
-| `NEXT-STEPS.md` | **Union merge** | Both sides' checkbox changes are valid. Accept all `[x]` marks from both sides. If main added new tasks, keep them. If your branch marked tasks done, keep those marks. |
+| `NEXT-STEPS.md` | **Skip** | This is a generated file in per-task mode. If monolithic, union merge checkbox states. |
 | `pyproject.toml` (version only) | **Take higher** | If the conflict is only in the `version = "..."` line, take whichever version is higher. |
 | `pyproject.toml` (other fields) | **Analyze** | Read both sides, understand what each changed, combine. Usually one side added a dependency and the other changed something else — both changes apply. |
 | `*.py` (source code) | **Analyze intent** | See "Code Conflict Resolution" below. |
@@ -321,6 +342,20 @@ If a version tag was created in Step 5, also push the tag:
 git push origin <tag>
 ```
 
+### Step 7a: Generate Technical Reviews (if claimed tasks exist)
+
+If tasks were detected in Step 1a, check for and embed technical review artifacts:
+
+```bash
+scripts/work-queue.sh is-reviewed
+```
+
+If reviews exist in `.claude/reviews/`, read each review file and embed them in the PR body (Step 8). Reviews provide context for PR reviewers about what was checked and any concerns.
+
+```bash
+scripts/work-queue.sh list-reviewed
+```
+
 ### Step 8: Create Pull Request
 
 ```bash
@@ -335,10 +370,17 @@ gh pr create --title "<title>" --body "$(cat <<'EOF'
 ## Summary
 <bullet points of changes>
 
+## Tasks Completed
+- [x] Task 1 title
+- [x] Task 2 title
+
 ## Test plan
 - [ ] <testing checklist>
 
-🤖 Generated with [Claude Code](https://claude.ai/claude-code)
+## Technical Review
+<embedded review content, if available>
+
+Generated with [Claude Code](https://claude.ai/claude-code)
 EOF
 )"
 ```
@@ -357,13 +399,21 @@ If PR already exists, update it if there are new commits.
 
 ### Step 9: Merge the PR
 
+Read merge strategy from `.claude/ship.json`:
+
+**If `mergeQueue` is `true`**: Enable auto-merge and exit. The merge queue handles the rest:
+
+```bash
+gh pr merge --squash --delete-branch --auto
+```
+
 **For docs-only commits** (commit message contains `[skip ci]`): merge immediately with `--admin` since no CI checks will run.
 
 ```bash
 gh pr merge --squash --delete-branch --admin
 ```
 
-**For code commits**: wait for CI checks to complete, then merge.
+**For code commits (no merge queue)**: wait for CI checks to complete, then merge.
 
 ```bash
 # Check PR status
@@ -378,7 +428,37 @@ If checks are failing, ask user whether to:
 - Merge anyway (with `--admin`)
 - Abort and fix issues
 
-### Step 10: Sync Local Repository
+### Step 10: Mark Claims as Shipped / Release
+
+If the work queue has claims for this worktree:
+
+**If `mergeQueue` is `true`** (PR enters merge queue, not immediately merged):
+
+```bash
+# Mark claims as shipped — exempt from TTL, released when PR merges
+scripts/work-queue.sh mark-shipped "<pr_number>" "<pr_url>"
+```
+
+**If `mergeQueue` is `false`** (PR merged directly):
+
+```bash
+# Release all claims held by this worktree
+scripts/work-queue.sh release-all
+```
+
+This frees the tasks for other agents. If the script is not found or the queue directory doesn't exist, skip silently — the work queue is optional.
+
+### Step 10a: Clean Review Artifacts
+
+If technical reviews were embedded in the PR body, clean up the local review files:
+
+```bash
+scripts/work-queue.sh clean-review
+```
+
+### Step 11: Sync Local Repository
+
+**Skip if `mergeQueue` is `true`** — the PR hasn't merged yet, so there's nothing to sync.
 
 Navigate to the local path and pull changes:
 
@@ -392,17 +472,6 @@ Verify the sync succeeded:
 ```bash
 cd "<localPath>" && git log -1 --oneline
 ```
-
-### Step 11: Release Work Queue Claims
-
-If the work queue has claims for this worktree, release them after shipping:
-
-```bash
-# Release all claims held by this worktree
-scripts/work-queue.sh release-all
-```
-
-This frees the tasks for other agents. If the script is not found or the queue directory doesn't exist, skip silently — the work queue is optional.
 
 ### Step 12: Cleanup
 
@@ -419,6 +488,10 @@ Since worktrees are automatically created by `/claim-tasks`, offer to remove the
 
 If the user accepts (or presses Enter), remove the worktree. If the user declines, the worktree remains for further work.
 
+**If `mergeQueue` is `true`**: Do NOT offer worktree removal. The PR is queued but not merged yet. Instead:
+
+> "PR queued for merge. Claims marked as shipped. This worktree can be removed after the PR merges."
+
 ## Output Format
 
 ```
@@ -431,70 +504,76 @@ Branch: inspiring-antonelli → main
 ───────────────────────────────────────────────────
 CI PARITY
 ───────────────────────────────────────────────────
-✓ ruff format clean                    # or: ⊘ Skipped (docs-only)
-✓ ruff check clean                     # or: ⊘ Skipped (docs-only)
-✓ mypy clean                           # or: ⊘ Skipped (docs-only)
+OK  ruff format clean                    # or: SKIP (docs-only)
+OK  ruff check clean                     # or: SKIP (docs-only)
+OK  mypy clean                           # or: SKIP (docs-only)
 
 ───────────────────────────────────────────────────
 COMMIT
 ───────────────────────────────────────────────────
-✓ Staged 5 files
-✓ Docs-only detected — added [skip ci]  # only if docs-only
-✓ Committed: "Add /ship skill for streamlined deployment"
+OK  Staged 5 files
+OK  Docs-only detected — added [skip ci]  # only if docs-only
+OK  Committed: "Add /ship skill for streamlined deployment"
 
 ───────────────────────────────────────────────────
 VERSION
 ───────────────────────────────────────────────────
-✓ Analyzed commits → MINOR increment
-✓ Bumped version: 0.1.0 → 0.2.0
-✓ Updated pyproject.toml
-✓ Updated src/your_package/__init__.py
-✓ Committed: "Bump version to 0.2.0"
-✓ Created tag: v0.2.0
+OK  Analyzed commits → MINOR increment
+OK  Bumped version: 0.1.0 → 0.2.0
+OK  Updated pyproject.toml
+OK  Updated src/your_package/__init__.py
+OK  Committed: "Bump version to 0.2.0"
+OK  Created tag: v0.2.0
 
 ───────────────────────────────────────────────────
 REBASE
 ───────────────────────────────────────────────────
-✓ Main is up to date — no rebase needed
+OK  Main is up to date — no rebase needed
   # or:
-✓ Rebased onto main (3 commits behind)
-✓ No conflicts
+OK  Rebased onto main (3 commits behind)
+OK  No conflicts
   # or:
-✓ Rebased onto main (7 commits behind)
-⚠ Resolved conflicts in 2 files:
-  • NEXT-STEPS.md — union merge (checkbox states)
-  • src/your_package/models.py — combined field additions
-✓ Post-rebase CI parity passed
-✓ Post-rebase tests passed
+OK  Rebased onto main (7 commits behind)
+!!  Resolved conflicts in 2 files:
+    - pyproject.toml — took higher version
+    - src/your_package/models.py — combined field additions
+OK  Post-rebase CI parity passed
+OK  Post-rebase tests passed
   # or (escalation):
-✗ Rebase aborted — 8 conflicted files
-  → Ask user for guidance
+FAIL  Rebase aborted — 8 conflicted files
+      → Ask user for guidance
 
 ───────────────────────────────────────────────────
 PUSH
 ───────────────────────────────────────────────────
-✓ Pushed to origin/inspiring-antonelli (force-with-lease)
-✓ Pushed tag v0.2.0
+OK  Pushed to origin/inspiring-antonelli (force-with-lease)
+OK  Pushed tag v0.2.0
 
 ───────────────────────────────────────────────────
 PULL REQUEST
 ───────────────────────────────────────────────────
-✓ Created PR #42: Add /ship skill for streamlined deployment
-  https://github.com/user/repo/pull/42
+OK  Created PR #42: Add /ship skill for streamlined deployment
+    https://github.com/user/repo/pull/42
 
 ───────────────────────────────────────────────────
 MERGE
 ───────────────────────────────────────────────────
-✓ CI checks passed                      # or: ⊘ CI skipped (docs-only)
-✓ Squash merged into main               # uses --admin when docs-only
-✓ Branch deleted
+OK  CI checks passed                      # or: SKIP (docs-only)
+OK  Squash merged into main               # uses --admin when docs-only
+OK  Branch deleted                        # or: Queued for merge (auto-merge)
+
+───────────────────────────────────────────────────
+CLAIMS
+───────────────────────────────────────────────────
+OK  Released 3 task claims                # or: Marked 3 claims as shipped
+OK  Review artifacts cleaned
 
 ───────────────────────────────────────────────────
 SYNC LOCAL
 ───────────────────────────────────────────────────
-✓ Fetched latest from origin
-✓ Pulled into <localPath>
-✓ Local repo now at: abc1234 Add /ship skill...
+OK  Fetched latest from origin            # or: SKIP (merge queue)
+OK  Pulled into <localPath>
+OK  Local repo now at: abc1234 Add /ship skill...
 
 ═══════════════════════════════════════════════════
                   SHIPPED!
@@ -524,7 +603,7 @@ SYNC LOCAL
 
 ## Worktree Safety
 
-This skill is designed for git worktree workflows. Key safety considerations:
+This skill is designed for git worktree workflows where all agents work within worktrees off the same repository. Key safety considerations:
 
 - **Never use `git stash`** — stashes are shared across all worktrees and can be lost if popped in the wrong one
 - **`--force-with-lease` is safe for worktree branches** — worktree branches are single-owner; no one else pushes to them. This flag still protects against unexpected state by verifying the remote ref matches what you expect.
@@ -542,3 +621,4 @@ This skill is designed for git worktree workflows. Key safety considerations:
 - If `gh` CLI is not authenticated, the skill will prompt for setup
 - Rebase uses `--force-with-lease` (not `--force`) for safety
 - Post-rebase verification catches issues before they reach CI
+- When `mergeQueue` is enabled, claims are marked shipped (not released) and local sync is deferred

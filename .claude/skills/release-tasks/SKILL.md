@@ -1,6 +1,5 @@
 ---
 name: release-tasks
-version: 1.0.0
 description: >
   Release claimed tasks back to the work queue. Use when abandoning work,
   when tasks are blocked, or for manual cleanup of stale claims.
@@ -39,7 +38,7 @@ Release all tasks claimed by this worktree.
 
 Released 3 tasks back to the work queue:
   1. fix-config-validation-edge-case
-  2. add-retry-logic-to-s3-publisher
+  2. add-retry-logic-to-publisher
   3. improve-mobile-nav-breadcrumbs
 
 These tasks are now available for other agents.
@@ -56,20 +55,36 @@ scripts/work-queue.sh release "<slug>"
 
 ### `/release-tasks expire`
 
-Remove all claims that have exceeded their TTL, from any worktree.
+Remove all claims that have exceeded their TTL, from any worktree. Shipped claims are exempt from expiration — they represent work waiting in the merge queue.
 
 ```bash
 scripts/work-queue.sh expire
 ```
 
-Report which claims were expired and from which worktrees.
+Also runs auto-release for merged PRs:
+
+```bash
+scripts/work-queue.sh auto-release-merged
+```
+
+Report which claims were expired, which were auto-released (merged), and from which worktrees.
 
 ## When to Use
 
 - **Abandoning work**: If you realize a task is too complex or blocked
 - **Rebalancing**: If one agent has too many tasks and another has none
 - **Cleanup**: After a crash or when a worktree is removed without shipping
-- **Sprint complete**: `/ship` releases claims automatically, but use this for partial completion
+- **Sprint complete**: `/ship` marks claims as shipped, but use this for manual release
+- **Post-merge cleanup**: `auto-release-merged` handles this automatically
+
+## Claim States
+
+| State | Meaning | Released by |
+|-------|---------|-------------|
+| `claimed` | Active work in progress | `release`, `release-all`, or `expire` (TTL) |
+| `shipped` | PR created, waiting to merge | `auto-release-merged` (after PR merges) |
+
+Shipped claims are exempt from TTL expiration. They are only released when their associated PR merges (detected by `auto-release-merged`).
 
 ## Error Handling
 

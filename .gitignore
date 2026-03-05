@@ -95,6 +95,15 @@ Thumbs.db
 .claude/settings.local.json
 CLAUDE.local.md
 
+# Work queue (shared via filesystem, not committed)
+.claude/work-queue/
+.claude/reviews/
+
+# Generated task files (rebuilt from per-task files via task-format.py)
+NEXT-STEPS.md
+NEXT-STEPS-COMPLETED.md
+.tasks.json
+
 # Project-specific data directories
 data/
 logs/
