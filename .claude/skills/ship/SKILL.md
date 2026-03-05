@@ -28,7 +28,7 @@ This skill reads from `.claude/ship.json` for project-specific settings:
 
 ```json
 {
-  "localPath": "/Users/yourname/code/project-name",
+  "localPath": "/path/to/your/repo",
   "defaultBase": "main",
   "mergeMethod": "squash"
 }
@@ -493,7 +493,7 @@ MERGE
 SYNC LOCAL
 ───────────────────────────────────────────────────
 ✓ Fetched latest from origin
-✓ Pulled into /home/user/code/project
+✓ Pulled into <localPath>
 ✓ Local repo now at: abc1234 Add /ship skill...
 
 ═══════════════════════════════════════════════════
