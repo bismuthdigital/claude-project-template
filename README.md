@@ -234,4 +234,4 @@ Add to the `allow` array in `.claude/settings.json`:
 
 ## License
 
-Apache 2.0
+MIT
