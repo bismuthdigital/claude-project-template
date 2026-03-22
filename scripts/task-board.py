@@ -20,6 +20,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 from collections import defaultdict
@@ -189,13 +190,24 @@ def load_inflight() -> set[str]:
 # ---------------------------------------------------------------------------
 
 
-def resolve_tasks(
+def _build_pending_id_map(tasks: list[TaskEntry]) -> dict[str, str]:
+    """Build a map from title/slug to task ID for pending tasks."""
+    id_map: dict[str, str] = {}
+    for t in tasks:
+        if t.id:
+            id_map[t.title] = t.id
+            id_map[slug_from_title(t.title)] = t.id
+    return id_map
+
+
+def resolve_tasks(  # noqa: PLR0912
     tasks: list[TaskEntry],
     claims: dict[str, ClaimInfo],
     inflight: set[str],
     completed_ids: set[str],
 ) -> list[BoardTask]:
     """Assign a status to each pending task."""
+    pending_id_map = _build_pending_id_map(tasks)
     board: list[BoardTask] = []
     for t in tasks:
         slug = slug_from_title(t.title)
@@ -209,9 +221,19 @@ def resolve_tasks(
                 continue
             # Strip trailing description after em dash or double dash
             dep_key = dep.split(" — ")[0].split(" -- ")[0].strip()
+            # Strip trailing parenthetical annotations like (M1.1), (M2.1)
+            dep_key = re.sub(r"\s*\([^)]*\)\s*$", "", dep_key)
             # Check if dependency is satisfied (by ID, title, slug, or filename)
             if dep_key not in completed_ids and dep_key not in inflight:
-                blocked_by.append(dep)
+                # Resolve to task ID for display (check title and slug)
+                dep_slug = slug_from_title(dep_key)
+                resolved_id = pending_id_map.get(dep_key) or pending_id_map.get(
+                    dep_slug
+                )
+                if resolved_id:
+                    blocked_by.append(resolved_id)
+                else:
+                    blocked_by.append(dep)
 
         # Status priority: in-flight > shipped > claimed > expired > blocked > available
         claim = claims.get(slug)
