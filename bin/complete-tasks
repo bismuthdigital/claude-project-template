@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Mark multiple tasks as complete in a single invocation.
+#
+# Usage:
+#   ./bin/complete-tasks --summary "Implemented with tests" slug1 slug2 slug3
+#   ./bin/complete-tasks --sprint 60 --summary "Done" slug1 slug2
+#
+# Options:
+#   --summary TEXT   Completion summary (required)
+#   --sprint  TEXT   Sprint identifier (default: worktree basename)
+#   --date    TEXT   Completion date (default: today UTC)
+#
+# Exits 0 if all tasks completed, 1 if any failed.
+# Reports per-task status to stderr.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PYTHON="${PROJECT_DIR}/.venv/bin/python"
+TASK_FORMAT="${PROJECT_DIR}/scripts/task-format.py"
+
+if [ ! -x "$PYTHON" ]; then
+    echo "Error: Python not found at ${PYTHON}" >&2
+    exit 1
+fi
+
+# Parse arguments
+SUMMARY=""
+SPRINT="$(basename "$PROJECT_DIR")"
+DATE=""
+SLUGS=()
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --summary)
+            SUMMARY="$2"
+            shift 2
+            ;;
+        --sprint)
+            SPRINT="$2"
+            shift 2
+            ;;
+        --date)
+            DATE="$2"
+            shift 2
+            ;;
+        --help|-h)
+            sed -n '2,/^$/s/^# //p' "$0"
+            exit 0
+            ;;
+        -*)
+            echo "Error: Unknown option: $1" >&2
+            exit 1
+            ;;
+        *)
+            SLUGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+if [ -z "$SUMMARY" ]; then
+    echo "Error: --summary is required" >&2
+    exit 1
+fi
+
+if [ ${#SLUGS[@]} -eq 0 ]; then
+    echo "Error: No task slugs provided" >&2
+    exit 1
+fi
+
+# Build base command
+BASE_CMD=("$PYTHON" "$TASK_FORMAT" complete-task)
+BASE_ARGS=(--sprint "$SPRINT" --summary "$SUMMARY")
+if [ -n "$DATE" ]; then
+    BASE_ARGS+=(--date "$DATE")
+fi
+
+FAILED=0
+COMPLETED=0
+
+for slug in "${SLUGS[@]}"; do
+    if "${BASE_CMD[@]}" "$slug" "${BASE_ARGS[@]}" 2>&1; then
+        COMPLETED=$((COMPLETED + 1))
+    else
+        echo "SKIP: $slug (not found or already completed)" >&2
+        FAILED=$((FAILED + 1))
+    fi
+done
+
+echo "" >&2
+echo "Completed ${COMPLETED}/${#SLUGS[@]} tasks (${FAILED} skipped)" >&2
+
+[ "$FAILED" -eq 0 ]

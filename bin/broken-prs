@@ -1,0 +1,185 @@
+#!/usr/bin/env bash
+# Find and categorize broken PRs (CI failures and merge conflicts).
+#
+# Consolidates the complex gh pr list queries with jq filters that
+# /fix-failed-pr constructs ad-hoc. Single permission entry covers all.
+#
+# Usage:
+#   ./bin/broken-prs                    # Find all broken PRs (JSON)
+#   ./bin/broken-prs ci-failures        # Only PRs with CI failures
+#   ./bin/broken-prs dirty              # Only PRs with merge conflicts
+#   ./bin/broken-prs pr-state <NUMBER>  # Detailed state for one PR
+#   ./bin/broken-prs combined-check <N> # Check if PR was already combined
+#   ./bin/broken-prs debug              # Dump raw state for all open PRs
+
+set -euo pipefail
+
+REPO="${REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)}"
+cmd="${1:-all}"
+shift || true
+
+# Helper: detect merge conflicts using both mergeStateStatus and mergeable.
+# GitHub can report BLOCKED (not DIRTY) for queue PRs that have conflicts,
+# so we check mergeable == "CONFLICTING" as the definitive indicator.
+_get_dirty_prs() {
+    gh pr list --state open -R "$REPO" \
+        --json number,title,headRefName,mergeStateStatus,mergeable,autoMergeRequest \
+        --jq '[.[] | select(.mergeStateStatus == "DIRTY" or .mergeable == "CONFLICTING") |
+            {number, title, branch: .headRefName,
+             inQueue: (.autoMergeRequest != null),
+             mergeState: .mergeStateStatus,
+             mergeable: .mergeable,
+             problem: "dirty"}]'
+}
+
+# Helper: count PRs with UNKNOWN mergeable state (GitHub still computing).
+# After pushes to main, GitHub asynchronously recomputes mergeable for all
+# open PRs. During this window, PRs show mergeable=="UNKNOWN" and would be
+# missed by _get_dirty_prs.
+_count_unknown_prs() {
+    gh pr list --state open -R "$REPO" \
+        --json number,mergeable \
+        --jq '[.[] | select(.mergeable == "UNKNOWN")] | length'
+}
+
+_get_ci_failure_prs() {
+    gh pr list --state open -R "$REPO" \
+        --json number,title,headRefName,statusCheckRollup,autoMergeRequest \
+        --jq '[.[] | select(.statusCheckRollup != null) |
+            select([.statusCheckRollup[] | select(.conclusion == "FAILURE")] | length > 0) |
+            {number, title, branch: .headRefName,
+             inQueue: (.autoMergeRequest != null),
+             problem: "ci_failure"}]'
+}
+
+case "$cmd" in
+
+    # ── All broken PRs (CI failures + merge conflicts, deduplicated) ──
+    all)
+        # Wait for GitHub to finish computing mergeable state for all PRs.
+        # After pushes to main, GitHub asynchronously recomputes mergeable
+        # for open PRs. During this window they show UNKNOWN and would be
+        # missed by _get_dirty_prs. We retry up to 5 times (25s total).
+        for _attempt in 1 2 3 4 5; do
+            UNKNOWN_COUNT=$(_count_unknown_prs)
+            if [[ "$UNKNOWN_COUNT" -eq 0 ]]; then
+                break
+            fi
+            echo "Waiting for GitHub to compute mergeable state ($UNKNOWN_COUNT PRs pending)..." >&2
+            sleep 5
+        done
+        if [[ "$UNKNOWN_COUNT" -gt 0 ]]; then
+            echo "Warning: $UNKNOWN_COUNT PRs still have UNKNOWN mergeable state after 25s" >&2
+        fi
+
+        CI_FAILURES=$(_get_ci_failure_prs)
+        DIRTY=$(_get_dirty_prs)
+
+        # Merge and deduplicate by PR number, combining problem tags
+        python3 -c "
+import json, sys
+ci = json.loads('''$CI_FAILURES''')
+dirty = json.loads('''$DIRTY''')
+merged = {}
+for pr in ci + dirty:
+    n = pr['number']
+    if n in merged:
+        if pr['problem'] not in merged[n]['problem']:
+            merged[n]['problem'] += '+' + pr['problem']
+    else:
+        # Drop internal fields from output
+        pr.pop('mergeState', None)
+        pr.pop('mergeable', None)
+        merged[n] = pr
+print(json.dumps(list(merged.values()), indent=2))
+"
+        ;;
+
+    # ── CI failures only ──────────────────────────────────────────────
+    ci-failures)
+        _get_ci_failure_prs
+        ;;
+
+    # ── Merge conflicts only ─────────────────────────────────────────
+    dirty)
+        _get_dirty_prs
+        ;;
+
+    # ── Detailed state for one PR ─────────────────────────────────────
+    pr-state)
+        NUMBER="${1:?Error: PR number required}"
+        gh pr view "$NUMBER" -R "$REPO" \
+            --json mergeStateStatus,mergeable,statusCheckRollup,autoMergeRequest,title,headRefName \
+            --jq '{
+                title: .title,
+                branch: .headRefName,
+                mergeState: .mergeStateStatus,
+                mergeable: .mergeable,
+                autoMerge: (.autoMergeRequest != null),
+                failedChecks: ([.statusCheckRollup[]? | select(.conclusion == "FAILURE")] | length),
+                totalChecks: ([.statusCheckRollup[]?] | length)
+            }'
+        ;;
+
+    # ── Check if PR was already combined ──────────────────────────────
+    combined-check)
+        NUMBER="${1:?Error: PR number required}"
+        # Check for "Combined into PR #..." comment
+        COMMENT_COUNT=$(gh pr view "$NUMBER" -R "$REPO" --comments --json comments \
+            --jq '[.comments[] | select(.body | test("Combined into PR #[0-9]+"))] | length' \
+            2>/dev/null || echo "0")
+        # Check if title starts with "Combined:"
+        TITLE=$(gh pr view "$NUMBER" -R "$REPO" --json title --jq '.title')
+        if [[ "$COMMENT_COUNT" -gt 0 ]]; then
+            echo '{"combined": true, "reason": "has_combined_comment"}'
+        elif [[ "$TITLE" == Combined:* ]]; then
+            echo '{"combined": true, "reason": "is_combined_pr"}'
+        else
+            echo '{"combined": false}'
+        fi
+        ;;
+
+    # ── PR context for combining ──────────────────────────────────────
+    pr-context)
+        NUMBER="${1:?Error: PR number required}"
+        gh pr view "$NUMBER" -R "$REPO" \
+            --json title,body,headRefName \
+            --jq '{title, body, branch: .headRefName}'
+        ;;
+
+    # ── Debug: raw state for all open PRs ─────────────────────────────
+    debug)
+        gh pr list --state open -R "$REPO" \
+            --json number,title,headRefName,mergeStateStatus,mergeable,autoMergeRequest,statusCheckRollup \
+            --jq '[.[] | {
+                number,
+                title,
+                branch: .headRefName,
+                mergeState: .mergeStateStatus,
+                mergeable: .mergeable,
+                autoMerge: (.autoMergeRequest != null),
+                failedChecks: ([.statusCheckRollup[]? | select(.conclusion == "FAILURE")] | length),
+                totalChecks: ([.statusCheckRollup[]?] | length)
+            }]'
+        ;;
+
+    # ── Help ──────────────────────────────────────────────────────────
+    help|--help|-h)
+        echo "Usage: ./bin/broken-prs <command> [options]"
+        echo ""
+        echo "Commands:"
+        echo "  all                  All broken PRs (default)"
+        echo "  ci-failures          PRs with CI failures"
+        echo "  dirty                PRs with merge conflicts"
+        echo "  pr-state <NUMBER>    Detailed state for one PR"
+        echo "  combined-check <N>   Check if PR was already combined"
+        echo "  pr-context <N>       Get PR title/body/branch"
+        echo "  debug                Dump raw state for all open PRs"
+        ;;
+
+    *)
+        echo "Unknown command: $cmd" >&2
+        echo "Run './bin/broken-prs help' for usage" >&2
+        exit 1
+        ;;
+esac

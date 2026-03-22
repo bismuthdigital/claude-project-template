@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Worktree context information.
+#
+# Provides the worktree-related queries that /ship, /technical-review,
+# and /claim-tasks routinely construct. Single permission entry:
+# "Bash(./bin/worktree-info *)".
+#
+# Usage:
+#   ./bin/worktree-info main-repo      # Path to main (non-worktree) repo
+#   ./bin/worktree-info name           # Current worktree name
+#   ./bin/worktree-info is-worktree    # Exit 0 if worktree, 1 if main repo
+#   ./bin/worktree-info list           # List all worktrees
+#   ./bin/worktree-info branch         # Current branch name
+#   ./bin/worktree-info disk-usage     # Disk usage of all worktrees
+
+set -euo pipefail
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+
+    # ── Path to main repo ─────────────────────────────────────────────
+    main-repo)
+        git worktree list --porcelain | head -1 | sed 's/^worktree //'
+        ;;
+
+    # ── Current worktree name ─────────────────────────────────────────
+    name)
+        CURRENT=$(pwd)
+        WORKTREE_NAME=$(basename "$CURRENT")
+        GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+        if [[ "$GIT_DIR" == *"/worktrees/"* ]]; then
+            echo "$WORKTREE_NAME"
+        else
+            echo "main"
+        fi
+        ;;
+
+    # ── Check if current dir is a worktree ────────────────────────────
+    is-worktree)
+        GIT_DIR=$(git rev-parse --git-dir 2>/dev/null)
+        if [[ "$GIT_DIR" == *"/worktrees/"* ]]; then
+            echo "true"
+            exit 0
+        else
+            echo "false"
+            exit 1
+        fi
+        ;;
+
+    # ── List all worktrees ────────────────────────────────────────────
+    list)
+        git worktree list
+        ;;
+
+    # ── Current branch name ───────────────────────────────────────────
+    branch)
+        git rev-parse --abbrev-ref HEAD
+        ;;
+
+    # ── Disk usage of all worktrees ───────────────────────────────────
+    disk-usage)
+        MAIN_REPO=$(git worktree list --porcelain | head -1 | sed 's/^worktree //')
+        WORKTREE_DIR="${MAIN_REPO}/.claude/worktrees"
+        if [[ -d "$WORKTREE_DIR" ]]; then
+            echo "Worktree disk usage:"
+            du -sh "${WORKTREE_DIR}"/* 2>/dev/null || echo "  (no worktrees found)"
+            echo ""
+            TOTAL=$(du -sh "$WORKTREE_DIR" 2>/dev/null | cut -f1)
+            echo "Total: ${TOTAL}"
+        else
+            echo "No worktree directory found"
+        fi
+        ;;
+
+    # ── Help ──────────────────────────────────────────────────────────
+    help|--help|-h)
+        echo "Usage: ./bin/worktree-info <command>"
+        echo ""
+        echo "Commands:"
+        echo "  main-repo     Path to main (non-worktree) repo"
+        echo "  name          Current worktree name"
+        echo "  is-worktree   Check if in a worktree (exit code)"
+        echo "  list          List all worktrees"
+        echo "  branch        Current branch name"
+        echo "  disk-usage    Disk usage of all worktrees"
+        ;;
+
+    *)
+        echo "Unknown command: $cmd" >&2
+        echo "Run './bin/worktree-info help' for usage" >&2
+        exit 1
+        ;;
+esac

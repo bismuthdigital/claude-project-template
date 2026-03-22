@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# Deterministic wrapper for CI/GitHub Actions operations.
+#
+# Consolidates gh run commands into a single script so that
+# permissions can be granted once via settings.json ("Bash(./bin/ci-status *)").
+# Used by: /ci-verify, /fix-failed-pr
+#
+# Usage:
+#   ./bin/ci-status latest                    # Latest run on current branch
+#   ./bin/ci-status latest --branch main      # Latest run on main
+#   ./bin/ci-status latest --event merge_group # Latest merge queue run
+#   ./bin/ci-status jobs <RUN_ID>             # Job-level status for a run
+#   ./bin/ci-status failed-steps <RUN_ID>     # Failed steps detail
+#   ./bin/ci-status log-failed <RUN_ID>       # Failed job logs
+#   ./bin/ci-status log-job <JOB_ID>          # Full log for a specific job
+#   ./bin/ci-status rerun <RUN_ID> [--failed] # Re-run a workflow
+#   ./bin/ci-status list [--limit N]          # List recent runs
+#   ./bin/ci-status checks [PR_NUMBER]        # PR check status
+
+set -euo pipefail
+
+REPO="${REPO:-$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null)}"
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+
+    # ── Latest run ────────────────────────────────────────────────────
+    latest)
+        BRANCH=""
+        EVENT=""
+        LIMIT=1
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --branch) BRANCH="$2"; shift 2 ;;
+                --event)  EVENT="$2"; shift 2 ;;
+                --limit)  LIMIT="$2"; shift 2 ;;
+                *) echo "Unknown option: $1" >&2; exit 1 ;;
+            esac
+        done
+        ARGS=("--limit" "$LIMIT" "-R" "$REPO" "--json" "databaseId,displayTitle,conclusion,status,headBranch,event,url,createdAt")
+        [[ -n "$BRANCH" ]] && ARGS+=("--branch" "$BRANCH")
+        [[ -n "$EVENT" ]] && ARGS+=("--event" "$EVENT")
+        gh run list "${ARGS[@]}"
+        ;;
+
+    # ── List recent runs ──────────────────────────────────────────────
+    list)
+        LIMIT=5
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --limit) LIMIT="$2"; shift 2 ;;
+                *) echo "Unknown option: $1" >&2; exit 1 ;;
+            esac
+        done
+        gh run list --limit "$LIMIT" -R "$REPO"
+        ;;
+
+    # ── Job-level status for a run ────────────────────────────────────
+    jobs)
+        RUN_ID="${1:?Error: RUN_ID required}"
+        gh run view "$RUN_ID" -R "$REPO" --json jobs \
+            --jq '.jobs[] | {name: .name, status: .status, conclusion: .conclusion}'
+        ;;
+
+    # ── Failed steps detail ───────────────────────────────────────────
+    failed-steps)
+        RUN_ID="${1:?Error: RUN_ID required}"
+        gh run view "$RUN_ID" -R "$REPO" --json jobs \
+            --jq '.jobs[] | {name: .name, conclusion: .conclusion, steps: [.steps[] | select(.conclusion != "success" and .conclusion != "skipped") | {name: .name, conclusion: .conclusion}]}'
+        ;;
+
+    # ── Failed job logs ───────────────────────────────────────────────
+    log-failed)
+        RUN_ID="${1:?Error: RUN_ID required}"
+        gh run view "$RUN_ID" -R "$REPO" --log-failed
+        ;;
+
+    # ── Full log for a specific job ───────────────────────────────────
+    log-job)
+        JOB_ID="${1:?Error: JOB_ID required}"
+        gh run view --job "$JOB_ID" -R "$REPO" --log
+        ;;
+
+    # ── Re-run a workflow ─────────────────────────────────────────────
+    rerun)
+        RUN_ID="${1:?Error: RUN_ID required}"; shift
+        if [[ "${1:-}" == "--failed" ]]; then
+            gh run rerun "$RUN_ID" --failed -R "$REPO"
+        else
+            gh run rerun "$RUN_ID" -R "$REPO"
+        fi
+        ;;
+
+    # ── PR check status ───────────────────────────────────────────────
+    checks)
+        PR_NUMBER="${1:-}"
+        if [[ -n "$PR_NUMBER" ]]; then
+            gh pr checks "$PR_NUMBER" -R "$REPO" --json name,state,conclusion
+        else
+            gh pr checks -R "$REPO" --json name,state,conclusion
+        fi
+        ;;
+
+    # ── View a run (human-readable summary) ───────────────────────────
+    view)
+        RUN_ID="${1:?Error: RUN_ID required}"
+        gh run view "$RUN_ID" -R "$REPO"
+        ;;
+
+    # ── Get run ID for a branch ───────────────────────────────────────
+    run-id)
+        BRANCH="${1:?Error: BRANCH required}"
+        gh run list --branch "$BRANCH" --limit 1 -R "$REPO" \
+            --json databaseId --jq '.[0].databaseId'
+        ;;
+
+    # ── Help ──────────────────────────────────────────────────────────
+    help|--help|-h)
+        echo "Usage: ./bin/ci-status <command> [options]"
+        echo ""
+        echo "Commands:"
+        echo "  latest [--branch B] [--event E]  Latest run (JSON)"
+        echo "  list [--limit N]                 List recent runs"
+        echo "  jobs <RUN_ID>                    Job-level status"
+        echo "  failed-steps <RUN_ID>            Failed steps detail"
+        echo "  log-failed <RUN_ID>              Failed job logs"
+        echo "  log-job <JOB_ID>                 Full log for a job"
+        echo "  rerun <RUN_ID> [--failed]        Re-run workflow"
+        echo "  checks [PR_NUMBER]               PR check status"
+        echo "  view <RUN_ID>                    Human-readable summary"
+        echo "  run-id <BRANCH>                  Get run ID for branch"
+        ;;
+
+    *)
+        echo "Unknown command: $cmd" >&2
+        echo "Run './bin/ci-status help' for usage" >&2
+        exit 1
+        ;;
+esac

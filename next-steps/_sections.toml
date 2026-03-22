@@ -1,0 +1,24 @@
+# Section metadata for per-task files.
+# Each [[sections]] entry defines a task category with ordering and description.
+# Tasks reference sections by `id` in their YAML frontmatter.
+
+[[sections]]
+id = "high-priority"
+title = "High Priority"
+priority = "high"
+sort_order = 1
+description = """Critical tasks that should be addressed first."""
+
+[[sections]]
+id = "medium-priority"
+title = "Medium Priority"
+priority = "medium"
+sort_order = 2
+description = """Important tasks to address after high-priority items."""
+
+[[sections]]
+id = "low-priority"
+title = "Low Priority / Nice to Have"
+priority = "low"
+sort_order = 3
+description = """Tasks that would be nice but are not urgent."""

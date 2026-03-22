@@ -3,204 +3,134 @@ name: ci-review
 description: >
   Check the status of a GitHub Actions CI run, diagnose failures, and suggest fixes.
   Inspects job logs, identifies root causes, and proposes actionable remediation.
-argument-hint: "[job name, run ID, or empty for latest]"
-allowed-tools: Read, Glob, Grep, Bash(gh *), Bash(cd * && gh *), Bash(curl *), Bash(source *)
+argument-hint: "[job name, run ID, 'queue', or empty for latest]"
+allowed-tools: Read, Glob, Grep, Bash(./bin/ci-status *), Bash(gh *), Bash(cd * && gh *), Bash(curl *), Bash(source *)
 ---
 
 # CI Review & Diagnosis
 
 Inspect a GitHub Actions workflow run, diagnose failures, and determine fixes.
 
-## Process
+## Step 1: Identify the Run
 
-### Step 1: Identify the Run
-
-Determine which run to inspect based on the argument:
-
-- **No argument**: Use the most recent run on the current branch or `main`
-- **Run ID** (numeric): Inspect that specific run
-- **Job name** (e.g., `test`, `lint`, `build`): Find the most recent run and focus on that job
+- **No argument**: Most recent run on current branch or `main`
+- **`queue`**: Latest merge queue run (`merge_group` event)
+- **Run ID** (numeric): That specific run
+- **Job name**: Focus on that job in latest run
 
 ```bash
-# List recent runs
+# Prefer ./bin/ci-status when available:
+./bin/ci-status list
+./bin/ci-status latest --branch $(git branch --show-current)
+./bin/ci-status latest --event merge_group
+
+# Fallback:
 gh run list --limit 5
-
-# If a specific run ID was given:
-gh run view <RUN_ID>
-
-# If looking for latest on current branch:
-gh run list --branch $(git branch --show-current) --limit 1
 ```
 
-### Step 2: Get Run Overview
-
-Fetch the run status and all job results:
+## Step 2: Get Run Overview
 
 ```bash
-# Get job-level status summary
-gh run view <RUN_ID> --json jobs --jq '.jobs[] | {name: .name, status: .status, conclusion: .conclusion}'
+./bin/ci-status jobs <RUN_ID>
+./bin/ci-status failed-steps <RUN_ID>
 
-# Get step-level detail for each job
-gh run view <RUN_ID> --json jobs --jq '.jobs[] | {name: .name, conclusion: .conclusion, steps: [.steps[] | select(.conclusion != "success" and .conclusion != "skipped") | {name: .name, conclusion: .conclusion}]}'
+# Fallback:
+gh run view <RUN_ID> --json jobs
 ```
 
-Report the overall status:
-
 ```
-===============================================
+═══════════════════════════════════════════════════
               CI RUN #<number>
-===============================================
-Run:    <display title>
+═══════════════════════════════════════════════════
+Run:    <title>
 Branch: <branch>
+Source: <PR #N if merge queue>
 Event:  <pull_request | push | merge_group>
-Status: <status> (<conclusion>)
-URL:    <url>
+Status: <status>
 
 Jobs:
   Lint .............. success
-  Test .............. success
-  Type Check ........ failure    <-- FOCUS
-  Deploy ............ skipped
+  Test .............. failure    <-- FOCUS
+  Type Check ........ success
 ```
 
-### Step 3: Diagnose Failures
-
-For any failed job, get the detailed logs:
+## Step 3: Diagnose Failures
 
 ```bash
-# Get failed step logs (most useful — only shows failing steps)
+./bin/ci-status log-failed <RUN_ID>
+./bin/ci-status log-job <JOB_ID>
+
+# Fallback:
 gh run view <RUN_ID> --log-failed
-
-# If --log-failed is empty (job was skipped, not failed), get full job log:
-gh run view <RUN_ID> --log | grep -A 50 "<Job Name>"
 ```
 
-If the argument specified a particular job name, focus on that job's logs even if it passed — the user wants to verify it.
-
-For **passed** jobs where the user wants verification:
-
-```bash
-# Get the full log for a specific job
-gh run view <RUN_ID> --json jobs --jq '.jobs[] | select(.name == "<Job Name>") | .databaseId'
-# Then:
-gh run view --job <JOB_ID> --log
-```
-
-### Step 4: Analyze & Classify
-
-Classify the failure into one of these categories:
+## Step 4: Classify
 
 | Category | Examples | Fix location |
 |----------|----------|-------------|
-| **Test failure** | Assertion error, import error, fixture failure | `tests/` or `src/` |
-| **Lint/format** | Ruff check failure, formatting issues | Run `ruff check --fix . && ruff format .` |
-| **Type error** | mypy annotation errors | Source files with type annotations |
-| **Infrastructure** | Secret missing, network timeout, dependency install fail | `.github/workflows/` or GitHub settings |
-| **Flaky/transient** | Timeout, network blip, resource exhaustion | Retry or add resilience |
-| **Configuration** | Missing env var, wrong marker expression, stale cache | `pyproject.toml`, CI config, GitHub secrets |
+| **Test failure** | Assertion error, import error | `tests/` or `src/` |
+| **Lint/format** | Ruff check failure | Run `ruff check --fix .` |
+| **Type error** | mypy annotation errors | Source files |
+| **Infrastructure** | Secret missing, timeout | `.github/workflows/` |
+| **Flaky/transient** | Network blip, timeout | Retry or add resilience |
+| **Configuration** | Missing env var, stale cache | `pyproject.toml`, CI config |
 
-For each failure, determine:
+## Step 5: Cross-Reference with Code
 
-1. **What failed** — the exact test, step, or command
-2. **Why it failed** — the root cause from the log output
-3. **Where to fix it** — the file(s) and line(s) to change
-4. **How to fix it** — a specific, actionable remediation
+Read failing test and source code it exercises. Check CI config files.
 
-### Step 5: Cross-Reference with Code
-
-For test failures, look at the failing test and the code it exercises:
-
-```bash
-# Read the failing test file
-# Read the source file being tested
-```
-
-For infrastructure issues, check:
-- `.github/workflows/` for CI configuration
-- `pyproject.toml` for test/lint configuration
-- GitHub secrets configuration
-
-### Step 6: Report
-
-Present a structured diagnosis:
+## Step 6: Report
 
 ```
-===============================================
+═══════════════════════════════════════════════════
               DIAGNOSIS
-===============================================
+═══════════════════════════════════════════════════
 
 Job: Test
 Step: Run pytest
 Status: FAILED
 
------------------------------------------------
-FAILURE #1
------------------------------------------------
-Test:     test_config::test_validate_empty_input
-Category: Test failure
-Error:    AssertionError: expected ValueError, got None
+FAILURE #1:
+  Test:     test_config::test_validate_empty
+  Category: Test failure
+  Error:    AssertionError
+  Root cause: validate() doesn't raise for empty input
+  Fix: Add empty check in src/your_package/config.py:42
 
-Root cause:
-  The validate() function does not raise ValueError
-  for empty string input — it returns None silently.
-
-Fix:
-  Add empty string check in src/your_package/config.py:42
-  before the main validation logic.
-
-Files:
-  - src/your_package/config.py:42
-  - tests/test_config.py:67
-
------------------------------------------------
-FAILURE #2 (if any)
------------------------------------------------
-...
-
-===============================================
+═══════════════════════════════════════════════════
               REMEDIATION PLAN
-===============================================
-
-1. [ ] <first fix step>
-2. [ ] <second fix step>
-3. [ ] Re-run: gh run rerun <RUN_ID>
+═══════════════════════════════════════════════════
+1. [ ] Fix validation in config.py
+2. [ ] Re-run: gh run rerun <RUN_ID>
 ```
 
-## Special Cases
+## Merge Queue
 
-### Merge Queue
+Merge queue runs differ from PR CI:
+- Triggered by `merge_group` event
+- Run on temporary merge commit (PR + latest main)
+- Branch: `gh-readonly-queue/main/pr-<N>-<sha>`
 
-If your repo uses GitHub's merge queue (`merge_group` event), merge queue CI runs differ from PR CI:
-- Triggered by `merge_group` event (not `pull_request`)
-- Runs on a temporary merge commit combining the PR with latest `main`
-- May run a stricter test suite than PR CI
-- Failures block the PR from merging
-
-To inspect merge queue runs:
 ```bash
-gh run list --event merge_group --limit 5
+./bin/ci-status latest --event merge_group
 ```
 
-### Skipped Jobs
+| Symptom | Root cause | Fix |
+|---------|-----------|-----|
+| Pass on PR, fail in queue | Conflict with concurrent PR | Rebase and re-queue |
+| Coverage threshold not met | PR CI skips coverage | Add tests |
+| Flaky test | Inconsistent under full suite | Fix flaky test |
 
-If a job shows as "skipped":
-- Check the `if:` condition in the workflow YAML
-- Jobs with `needs:` are skipped if their dependency failed
+Re-queue after fixing:
+```bash
+gh pr merge <PR_NUMBER> --merge --auto
+```
 
-### Re-running
-
-After applying a fix:
+## Re-running
 
 ```bash
-# Re-run only failed jobs
+./bin/ci-status rerun <RUN_ID> --failed
+
+# Fallback:
 gh run rerun <RUN_ID> --failed
-
-# Re-run entire workflow
-gh run rerun <RUN_ID>
 ```
-
-## Notes
-
-- The `--log-failed` flag is the fastest way to get diagnostic info
-- Always cross-reference CI failures with local reproduction when possible
-- For flaky tests, check if the test passes locally before adding retry logic

@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+# Fuzzy match task titles against a search query.
+#
+# Replaces the inline Python Levenshtein script that /claim-tasks
+# constructs ad-hoc. Single permission entry: "Bash(./bin/fuzzy-match *)".
+#
+# Usage:
+#   ./bin/fuzzy-match "fix config" < /tmp/claim-tasks-pending.json
+#   ./bin/fuzzy-match --multi "hist" < /tmp/claim-tasks-pending.json
+#   echo '[{"title":"Fix config","slug":"fix-config"}]' | ./bin/fuzzy-match "config"
+#
+# Input: JSON array of task objects on stdin (must have "title" and "slug" fields)
+# Output (single mode): JSON with best match, score, threshold, and confidence boolean
+# Output (--multi mode): JSON with matches array — all confident matches, sorted by score
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Resolve Python: local venv → main repo venv → system python3
+if [ -x "${PROJECT_DIR}/.venv/bin/python" ]; then
+    VENV_PYTHON="${PROJECT_DIR}/.venv/bin/python"
+elif [ -x "$(git -C "$PROJECT_DIR" worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')/.venv/bin/python" ]; then
+    VENV_PYTHON="$(git -C "$PROJECT_DIR" worktree list --porcelain | head -1 | sed 's/^worktree //')/.venv/bin/python"
+else
+    VENV_PYTHON="python3"
+fi
+
+MULTI_MODE=""
+if [ "${1:-}" = "--multi" ]; then
+    MULTI_MODE="1"
+    shift
+fi
+
+QUERY="${1:?Error: search query required}"
+
+MULTI_MODE="$MULTI_MODE" "$VENV_PYTHON" -c "
+import sys, json, os
+
+def levenshtein(s1, s2):
+    if len(s1) < len(s2):
+        return levenshtein(s2, s1)
+    if not s2:
+        return len(s1)
+    prev = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr = [i + 1]
+        for j, c2 in enumerate(s2):
+            curr.append(min(prev[j+1]+1, curr[j]+1, prev[j]+(c1!=c2)))
+        prev = curr
+    return prev[-1]
+
+query = sys.argv[1].lower().strip()
+multi = os.environ.get('MULTI_MODE', '') == '1'
+tasks = json.load(sys.stdin)
+
+results = []
+for t in tasks:
+    title = t.get('title', '').lower()
+    slug = t.get('slug', '').lower()
+    roles = t.get('roles', t.get('role_tag', ''))
+    role = ' '.join(roles).lower() if isinstance(roles, list) else str(roles).lower()
+    section = t.get('section', '').lower()
+    section_title = t.get('section_title', '').lower()
+    task_id = (t.get('id') or '').lower()
+    d_title = levenshtein(query, title)
+    d_slug = levenshtein(query, slug)
+    if query in title or query in slug or query in role or query in section or query in section_title or query == task_id:
+        best = 0
+    else:
+        best = min(d_title, d_slug)
+    threshold = max(len(query), len(title)) * 0.6
+    results.append((best, threshold, t))
+
+results.sort(key=lambda x: x[0])
+
+if multi:
+    # Multi mode uses substring matching: only return tasks where the query
+    # appears in the title, slug, or role_tag (score == 0). This prevents
+    # short queries like 'hist' from matching unrelated tasks via the
+    # lenient Levenshtein threshold.
+    matches = []
+    for score, threshold, task in results:
+        if score == 0:
+            matches.append({'match': task, 'score': score, 'threshold': threshold, 'confident': True})
+    print(json.dumps({'matches': matches, 'count': len(matches)}))
+else:
+    if results:
+        score, threshold, match = results[0]
+        print(json.dumps({'match': match, 'score': score, 'threshold': threshold, 'confident': score <= threshold}))
+    else:
+        print(json.dumps({'match': None, 'score': -1, 'threshold': 0, 'confident': False}))
+" "$QUERY"

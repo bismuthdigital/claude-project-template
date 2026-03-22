@@ -2,7 +2,7 @@
 
 ## Overview
 
-A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 21 custom skills — so you can start building immediately with sensible defaults.
+A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 24 custom skills — so you can start building immediately with sensible defaults.
 
 ## Architecture
 
@@ -17,13 +17,29 @@ tests/                     # Test files
 scripts/                   # Utility scripts
 ├── work-queue.sh          # Task claiming for concurrent agents
 ├── task-format.py         # Task file parser, validator, and renderer
+├── task-board.py          # Unified task board aggregation
+├── worktree-cleanup.sh    # Stale worktree cleanup
 └── sync-all-projects.sh   # Sync config across all repos
+
+bin/                       # Deterministic wrapper scripts
+├── worktree-info          # Git worktree queries
+├── pr                     # GitHub PR operations
+├── ci-status              # CI run inspection
+├── broken-prs             # Discover broken PRs
+├── fuzzy-match            # Levenshtein task matching
+└── complete-tasks         # Batch task completion
+
+next-steps/                # Per-task file storage
+├── _meta.md               # Static header
+├── _sections.toml         # Section ordering and metadata
+├── active/                # Pending task files
+└── completed/             # Completed task files
 
 .claude/
 ├── settings.json          # Permissions and hooks
 ├── ship.json              # Ship workflow settings
-├── hooks/                 # Auto-linting, venv activation
-└── skills/                # 21 skill definitions
+├── hooks/                 # Auto-linting, venv activation, worktree isolation
+└── skills/                # 24 skill definitions
 
 install.sh                 # Template installer
 ```
@@ -101,12 +117,15 @@ This project includes Claude Code skills for development:
 | `/comic` | Generate SVG explainer comics about the project |
 | `/ship` | Commit, PR, merge, and sync local repo |
 | `/version` | Bump version, create and push git tag |
-| `/claim-tasks` | Claim tasks from NEXT-STEPS.md for parallel worktree agents |
+| `/claim-tasks` | Claim tasks from backlog with 4-phase merge-queue execution |
+| `/sprint` | Thin wrapper over claim-tasks with resume detection |
 | `/release-tasks` | Release claimed tasks back to the work queue |
+| `/code-health` | Active code review — read, diagnose, and fix quality issues |
+| `/worktree-cleanup` | Clean up stale worktrees and reclaim disk space |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
 | `/prompt-review` | Review AI prompts for quality and suggest improvements |
 | `/next-steps` | Identify, consolidate, and maintain project next steps |
 | `/ci-review` | Diagnose GitHub Actions CI failures and suggest fixes |
-| `/fix-failed-pr` | Find and repair PRs with CI failures or merge conflicts |
+| `/fix-failed-pr` | Batch-fix broken PRs with combine mode |
 | `/aws-manifest` | Generate AWS infrastructure manifest |

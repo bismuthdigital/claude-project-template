@@ -102,6 +102,13 @@ if [ "$EXISTING_PROJECT" = true ]; then
     cp -r "$TEMP_DIR/.claude" "$TARGET_DIR/"
     chmod +x "$TARGET_DIR/.claude/hooks/"*.sh 2>/dev/null || true
 
+    # Copy workflow infrastructure
+    [ -d "$TEMP_DIR/scripts" ] && cp -r "$TEMP_DIR/scripts" "$TARGET_DIR/" 2>/dev/null || true
+    [ -d "$TEMP_DIR/bin" ] && cp -r "$TEMP_DIR/bin" "$TARGET_DIR/" && chmod +x "$TARGET_DIR/bin/"* 2>/dev/null || true
+    [ -d "$TEMP_DIR/next-steps" ] && cp -r "$TEMP_DIR/next-steps" "$TARGET_DIR/" 2>/dev/null || true
+    [ -d "$TEMP_DIR/docs" ] && cp -r "$TEMP_DIR/docs" "$TARGET_DIR/" 2>/dev/null || true
+    chmod +x "$TARGET_DIR/scripts/"*.sh 2>/dev/null || true
+
     # Optionally copy other files
     if [ ! -f "$TARGET_DIR/.gitignore" ]; then
         cp "$TEMP_DIR/.gitignore" "$TARGET_DIR/"
@@ -190,8 +197,10 @@ else
         success "Updated pyproject.toml"
     fi
 
-    # Make hook scripts executable
+    # Make scripts executable
     chmod +x "$TARGET_DIR/.claude/hooks/"*.sh 2>/dev/null || true
+    chmod +x "$TARGET_DIR/scripts/"*.sh 2>/dev/null || true
+    chmod +x "$TARGET_DIR/bin/"* 2>/dev/null || true
 
     # Initialize git
     info "Initializing git repository..."
@@ -213,18 +222,18 @@ else
     echo "  # Update CLAUDE.md with your project description"
     echo "  # Start coding in src/$PACKAGE_NAME/"
     echo ""
-    echo "Available skills:"
+    echo "Available skills (24 total — see CLAUDE.md for full list):"
     echo "  /lint           - Run linters and formatters"
     echo "  /test           - Run tests with coverage"
     echo "  /review         - Code review for issues"
-    echo "  /bash-review    - Review bash scripts for issues"
-    echo "  /docs           - Review documentation and comments"
-    echo "  /check          - Full validation pipeline"
+    echo "  /code-health    - Active code review and fix"
     echo "  /ship           - Commit, PR, merge, and sync"
-    echo "  /version        - Bump version and create git tag"
-    echo "  /cost-estimate  - Estimate API costs"
-    echo "  /model-alternatives - Find free model replacements"
-    echo "  /prompt-review  - Review AI prompts for quality"
+    echo "  /claim-tasks    - Claim and implement tasks (4-phase)"
+    echo "  /sprint         - Quick claim-tasks wrapper"
+    echo "  /next-steps     - Identify and maintain task backlog"
+    echo "  /fix-failed-pr  - Batch-fix broken PRs"
+    echo "  /ci-review      - Diagnose CI failures"
+    echo "  /worktree-cleanup - Clean up stale worktrees"
     echo "  /sync-config    - Compare config against template"
     echo ""
 fi

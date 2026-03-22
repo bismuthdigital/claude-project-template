@@ -1,311 +1,230 @@
 ---
 name: claim-tasks
 description: >
-  Claim tasks from NEXT-STEPS.md. Automatically creates an isolated git
-  worktree before claiming, so development happens on a clean branch.
-  Prevents concurrent agents from picking the same work via file-based locks.
-argument-hint: "[N | list | status]"
-allowed-tools: Read, Glob, Grep, Bash(*/work-queue.sh *), Bash(git worktree list*), Bash(git tag *), Bash(git log *), Bash(grep *version* pyproject.toml), Bash(git rev-parse *), Bash(*/task-format.py *), EnterWorktree, AskUserQuestion
+  Claim tasks from the task backlog (`next-steps/active/`), then implement
+  them using a merge-queue strategy: implement each with tests, then
+  verify test quality for the batch. Accepts a number (claim N tasks),
+  text (fuzzy match), or "list"/"status" for inspection.
+argument-hint: "[N | task description | slug | list | status]"
+allowed-tools: Read, Write, Edit, Glob, Grep, Bash, Bash(./bin/fuzzy-match *), Bash(./bin/worktree-info *), Bash(./bin/complete-tasks *), Bash(.venv/bin/python scripts/task-board.py *), Agent, AskUserQuestion, Skill
 ---
 
-# Claim Tasks
+# Claim Tasks — Merge Queue Execution
 
-You are claiming tasks from NEXT-STEPS.md. When claiming tasks (not listing or checking status), this skill first ensures the session is in an isolated git worktree, creating one automatically if needed. This prevents other concurrent Claude Code agents from duplicating the same work.
+Claim tasks from the task backlog and implement them end-to-end using a
+merge-queue strategy. Multiple features are implemented with proper tests
+between each, then test quality is verified for the batch.
+Auto-invokes `/ship` when complete.
 
-**Assumption:** All agents work within worktrees off the same repository. The work queue relies on a shared filesystem directory visible to all worktrees.
+## Task System Reference
 
-## How It Works
+Tasks are stored as per-task markdown files with YAML frontmatter:
 
-Tasks are claimed by writing lock files to a shared directory that all worktrees can see. The lock directory lives in the **main repo's** `.claude/work-queue/claims/`. Since all worktrees are children of the main repo, they can all read and write this directory.
+- **Pending tasks**: `next-steps/active/*.md`
+- **Completed tasks**: `next-steps/completed/*.md`
+- **Section ordering**: `next-steps/_sections.toml`
+- **Full format spec**: `docs/TASK-FORMAT.md`
 
-The helper script `scripts/work-queue.sh` manages all claim operations.
+`NEXT-STEPS.md` is a **generated artifact** — rendered by CI via `scripts/task-format.py render`. Never read or edit it directly.
 
-## Task Storage Modes
+**Key commands** (always use these — never manually create/edit task files):
 
-Tasks may be stored in two formats:
+| Command | Purpose |
+|---------|---------|
+| `scripts/task-format.py parse` | Parse all pending tasks to JSON |
+| `scripts/task-format.py create-task --role X --section Y --priority Z --title "..."` | Create a new task file |
+| `./bin/complete-tasks --summary "..." slug1 slug2 ...` | Mark tasks complete (batch), move to `completed/` |
+| `scripts/task-format.py validate` | Check task format compliance |
+| `scripts/task-format.py lookup "<title or ID>"` | Find a task by title or ID |
+| `scripts/task-format.py list-unreviewed` | List tasks without technical reviews |
+| `scripts/task-format.py render` | Regenerate NEXT-STEPS.md locally (CI does this after merge) |
 
-1. **Per-task files** (preferred): Individual `.md` files in `next-steps/active/` with YAML frontmatter. Detected when the `next-steps/` directory exists. Use `scripts/task-format.py render` to generate `NEXT-STEPS.md` from these files.
-2. **Monolithic** (legacy): Tasks stored directly in `NEXT-STEPS.md`.
+## Input Parsing
 
-The claiming process works the same regardless of storage mode — it reads from `NEXT-STEPS.md` (rendered or committed).
+Determine the mode from the user's argument:
 
-## Commands
+| Input | Mode |
+|-------|------|
+| (empty) or `1` | **count** — claim 1 task |
+| Any positive integer N | **count** — claim N tasks |
+| `list` | **list** — show all claims, no execution |
+| `status` | **status** — show this worktree's claims, no execution |
+| Any other text | **fuzzy** — match against task titles/slugs |
 
-### `/claim-tasks N` (default: 3)
+### Fuzzy Matching
 
-Claim N unclaimed tasks from NEXT-STEPS.md.
+When the input is text (not a number, not `list`/`status`):
 
-1. **Ensure worktree isolation**:
+1. Load pending tasks via `task-board.py --json` (or reuse if already loaded)
+2. Run multi-match:
    ```bash
-   git rev-parse --git-dir
+   ./bin/fuzzy-match --multi "<search_term>" < /tmp/claim-tasks-pending.json
    ```
-   - If the output contains `/worktrees/`, you are already in a worktree — proceed to step 2.
-   - If the output ends with `.git`, you are on main — use the **EnterWorktree** tool with no `name` argument (it will auto-generate a name), then verify:
-     ```bash
-     git rev-parse --git-dir
-     ```
-   - **Important:** Do NOT ask the user for confirmation. Worktree creation is automatic and silent. Note the worktree name for the final output.
+3. Filter matches to only `status: "available"` tasks
+4. Batch size limits: 0 matches = stop, 1-5 = claim all, 6+ = claim top 5 (ask to claim all)
 
-2. **Initialize** the work queue:
-   ```bash
-   scripts/work-queue.sh init
-   ```
-
-3. **Auto-release merged PRs**: Clean up claims for PRs that have already been merged:
-   ```bash
-   scripts/work-queue.sh auto-release-merged
-   ```
-
-4. **Expire stale claims**: Remove claims that exceeded their TTL (skips shipped claims):
-   ```bash
-   scripts/work-queue.sh expire
-   ```
-
-5. **Render task files** (if per-task mode):
-   ```bash
-   # Check if per-task mode is active
-   ls next-steps/active/ 2>/dev/null
-   ```
-   If the directory exists, render NEXT-STEPS.md from task files:
-   ```bash
-   scripts/task-format.py render
-   ```
-
-6. **Read** NEXT-STEPS.md to get the full task list
-
-7. **List** current claims to see what's already taken:
-   ```bash
-   scripts/work-queue.sh list
-   ```
-
-8. **Check in-flight PRs** for tasks already completed in unmerged PRs:
-   ```bash
-   scripts/work-queue.sh inflight-tasks
-   ```
-   This returns a JSON array of task titles that are marked `[x]` in open PRs. These tasks are being shipped by another agent and should be excluded from claiming, even though they still appear as `[ ]` in the local NEXT-STEPS.md.
-
-9. **Parse tasks** from the High Priority and Medium Priority sections. Each task looks like:
-   ```markdown
-   - [ ] **[role] Task title** — Description
-   ```
-   Extract: the checkbox state, role tag, title, and description.
-
-10. **Filter** out:
-    - Tasks already completed (`[x]`)
-    - Tasks already claimed by another worktree (check the `list` output)
-    - Tasks whose dependencies are not yet complete
-    - Tasks completed in open PRs (from the `inflight-tasks` output)
-
-11. **Select** up to N unclaimed tasks. Prefer:
-    - Higher priority first (High > Medium > Low)
-    - Tasks with fewer dependencies
-    - Tasks that are coherent together (same area of the codebase)
-
-12. **Speculate version** for this batch of tasks (see Version Speculation below). This determines a `speculated_version` string to include in each claim.
-
-13. **Batch claim** using try-claim for atomic, race-safe claiming:
-
-    Write a candidates file at `/tmp/wq-candidates-<worktree_name>.json`:
-    ```json
-    [
-      {"title": "Task title one", "section": "High Priority", "role_tag": "dev"},
-      {"title": "Task title two", "section": "Medium Priority", "role_tag": "test"}
-    ]
-    ```
-
-    ```bash
-    scripts/work-queue.sh try-claim <N> /tmp/wq-candidates-<worktree_name>.json
-    ```
-
-    Parse the JSON output — `got` tells you how many were claimed, `claims` contains the details. If `got` is 0, all candidates were already taken.
-
-    After try-claim, update each claim with the speculated version:
-    ```bash
-    scripts/work-queue.sh claim "<slug>" "<title>" "<section>" "<role_tag>" "<speculated_version>"
-    ```
-
-14. **Present** the claim results:
-
-```
-═══════════════════════════════════════════════════
-            TASKS CLAIMED
-═══════════════════════════════════════════════════
-
-Worktree: festive-mendel (auto-created)
-Branch: claude-worktree-festive-mendel
-Claimed: 3 tasks | Skipped: 2 (claimed) | In-flight: 3 (open PRs)
-Speculated version: 0.18.0 (minor)
-
-───────────────────────────────────────────────────
-YOUR TASKS
-───────────────────────────────────────────────────
-
-1. [dev] Fix config validation edge case
-   Section: High Priority
-   Files: src/your_package/config.py
-
-2. [dev] Add retry logic to publisher
-   Section: High Priority
-   Files: src/your_package/publish.py
-
-3. [design] Improve mobile nav breadcrumbs
-   Section: Medium Priority
-   Files: src/your_package/templates/
-
-───────────────────────────────────────────────────
-CLAIMED BY OTHERS
-───────────────────────────────────────────────────
-
-exciting-shtern (v0.19.0):
-  - [docs] Rewrite getting started guide (42 min ago)
-  - [test] Add integration test coverage (42 min ago)
-
-───────────────────────────────────────────────────
-IN-FLIGHT (OPEN PRs)
-───────────────────────────────────────────────────
-
-  - Add content hash dedup for submissions (PR #145)
-  - Improve error messages in validation (PR #145)
-  - Add batch-process CLI command (PR #145)
-
-───────────────────────────────────────────────────
-
-Ready to start working, or **/ship** when done
-to merge back to main.
-═══════════════════════════════════════════════════
-```
-
-Note: Include `(auto-created)` after the worktree name only if the worktree was created in step 1. Omit it if the worktree pre-existed.
+## Inspection Commands
 
 ### `/claim-tasks list`
 
-Show all current claims across all worktrees without claiming anything new.
-
-> This command does NOT create a worktree. It runs wherever the session currently is.
-
-1. Run `scripts/work-queue.sh list` to get the JSON claim data
-2. Present a formatted summary grouped by worktree, including speculated versions and shipped state
+Show all current claims across all worktrees:
+```bash
+.venv/bin/python scripts/task-board.py
+```
 
 ### `/claim-tasks status`
 
-Show only this worktree's claimed tasks.
+Show this worktree's claims:
+```bash
+scripts/work-queue.sh claimed-by-me
+```
 
-> This command does NOT create a worktree. It runs wherever the session currently is.
+**For both inspection commands, stop — do not proceed to execution.**
 
-1. Run `scripts/work-queue.sh claimed-by-me`
-2. Present a formatted list including speculated version and shipped state
+---
 
-## Version Speculation
+## Test Execution Discipline
 
-When claiming tasks, speculate on the next appropriate semver version. This helps concurrent agents avoid version collisions when they independently ship and version their work.
+These rules apply to ALL phases:
 
-### How It Works
+1. **Commit before test.** Always `git add -A && git commit && git push` BEFORE running tests.
+2. **One foreground test run.** Run `pytest` with `timeout: 300000` (5 minutes).
+3. **Never pipe test output.** Run directly and read output.
+4. **Never run tests in background.** No `run_in_background` for test runs.
+5. **Maximum 3 fix-rerun cycles per phase.** If still failing, move on — CI is the gate.
+6. **Never blame the user for interruptions.** Check committed state and continue.
 
-1. **Get the current project version** from `pyproject.toml`:
+## Interruption Handling
+
+When the user interrupts, **stop and assess**:
+1. Run `git log --oneline -5` and `git diff --stat` to show saved state
+2. Offer options: continue from last commit, skip task, stop batch and ship
+3. Never re-launch the same prompt unchanged
+
+---
+
+## Four-Phase Execution
+
+### Phase 1 — Claim & Orient
+
+**Runs in the main context. Writes a handoff file for Phase 2.**
+
+0. **Ensure venv exists**:
    ```bash
-   grep -E "^version" pyproject.toml
+   test -x .venv/bin/python || (python3 -m venv .venv && .venv/bin/pip install -e ".[dev]" 2>&1 | tail -5)
    ```
 
-2. **Check for the highest claimed version** across all active and shipped claims:
+1. **Initialize work queue and load task board**:
    ```bash
-   scripts/work-queue.sh max-claimed-version
-   ```
-   This returns a version string (e.g., `0.18.0`) or `NONE` if no claims have versions.
-
-3. **Determine the base version** for incrementing:
-   - If `max-claimed-version` returns `NONE`, use the project version from `pyproject.toml` as the base
-   - If `max-claimed-version` returns a version, use whichever is higher: the project version or the max claimed version
-
-4. **Determine the increment level** from the selected tasks:
-
-   | Task Pattern | Increment | Examples |
-   |-------------|-----------|---------|
-   | New feature, new page, new command, new capability | **MINOR** | "Add dark mode", "Create user dashboard", "Add export command" |
-   | Bug fix, typo, docs update, test addition, refactor, chore | **PATCH** | "Fix config validation", "Update README", "Add missing tests" |
-   | Breaking change, remove feature, change public API | **MAJOR** | "Remove legacy API", "Redesign data schema" |
-
-   Use the **highest** applicable level across all selected tasks. When in doubt, default to PATCH.
-
-5. **Calculate the speculated version** by applying the increment to the base:
-   ```
-   Base: 0.17.1
-     + PATCH → 0.17.2
-     + MINOR → 0.18.0
-     + MAJOR → 1.0.0
+   scripts/work-queue.sh init
+   scripts/work-queue.sh auto-release-merged
+   .venv/bin/python scripts/task-board.py --json > /tmp/claim-tasks-board.json
    ```
 
-6. **Pass the version** to each claim command as the 5th argument.
+2. **Select tasks** — by count (highest priority) or fuzzy match. Only `status: "available"`.
+   Use pre-computed `clusters` from board JSON for count mode.
 
-### Examples
+   **PR conflict detection** after selecting candidates:
+   ```bash
+   scripts/work-queue.sh check-pr-overlap '["src/foo.py", ...]'
+   ```
 
-**No other claims, project at 0.17.1, claiming bug fixes:**
-- Base: 0.17.1 (from pyproject.toml)
-- Increment: PATCH (bug fixes only)
-- Speculated: `0.17.2`
+3. **Already-implemented check** — verify each candidate hasn't been implemented on main.
+   If found, complete immediately:
+   ```bash
+   ./bin/complete-tasks --summary "Already implemented in main" <slug>
+   ```
 
-**Another agent claimed 0.18.0, project at 0.17.1, claiming a new feature:**
-- Base: 0.18.0 (highest claimed version)
-- Increment: MINOR (new feature)
-- Speculated: `0.19.0`
+4. **Claim** using `try-claim`:
+   ```bash
+   scripts/work-queue.sh try-claim <N> /tmp/wq-candidates-<worktree>.json
+   ```
 
-**Another agent claimed 0.17.2, project at 0.17.1, claiming a bug fix:**
-- Base: 0.17.2 (highest claimed version)
-- Increment: PATCH
-- Speculated: `0.17.3`
+5. **Generate missing technical reviews** for claimed tasks. Write to `${MAIN_REPO}/.claude/reviews/<slug>.md`.
 
-### Important Notes
+6. **Write handoff file** at `/tmp/claim-tasks-<worktree>.json`.
 
-- The speculated version is a **best guess** — the actual version will be determined at `/version` time based on real commit analysis
-- If the `/version` skill detects a different increment level from actual commits, the actual version takes precedence
-- This coordination is advisory, not enforced — it prevents the common case where two agents both target the same version number
-- Expired claims (past TTL) are excluded from version calculations — crashed agents don't inflate version speculation for active agents
-- Shipped claims ARE included in version calculations — they represent in-flight versions waiting to merge
+7. **Present** the claim summary.
 
-## Task Slug Generation
+---
 
-Slugs are **auto-generated by the script** from the task title. Do NOT manually compute slugs — just pass the exact title and a placeholder slug. The script's `slug_from_title()` function is the single source of truth.
+### Phase 2 — Implement with Tests
 
-## Safety Rules
+**Each task runs in its own subagent (Agent tool) for fresh context.**
 
-1. **Never `rm -f` claim files directly.** Always use `scripts/work-queue.sh release` or `release-all`. Direct deletion bypasses ownership checks and can delete another agent's claims.
-2. **Never `cd` to the main repo before running the script.** The script resolves the main repo path internally. Changing CWD to the main repo before running causes worktree detection to misidentify as "main".
-3. **Never edit claim JSON files directly.** Use the script's subcommands. Direct edits bypass validation.
-4. **Run `scripts/work-queue.sh validate`** if you suspect claim issues (duplicates, mismatches, orphans).
+For each task, spawn an Agent that:
+1. Reads the handoff file and technical review
+2. Reads source files and understands existing code
+3. Implements the feature/fix with incremental commits
+4. Writes tests (5-10 per task, add to existing files first)
+5. Runs scoped `pytest` with timeout
+6. Updates handoff file status to "implemented"
+
+**Test efficiency rules:**
+- Add to existing test files first — no duplicate scope files
+- Share fixtures via conftest.py
+- 5-10 tests per task, not more
+- Never assert exact counts of dynamic data
+- Never assert specific prose phrases
+
+---
+
+### Phase 2.5 — Code Health Review
+
+**Single subagent reviewing all changed files.**
+
+Review checklist:
+1. **Simplification** — early returns, dead code removal, idiomatic Python
+2. **Assumption checking** — type annotations match runtime, callers match callees
+3. **Anti-patterns** — mutable defaults, bare except, god functions
+4. **Consistency** — module patterns, naming conventions, error handling
+
+Commit fixes per file, run lint and tests after all fixes.
+
+---
+
+### Phase 3 — Verify and Harden
+
+**Single subagent. Does NOT write new test files.**
+
+1. Review test fixture efficiency and duplication
+2. Merge duplicate test files, delete trivial tests
+3. Run `mypy src/`
+4. Complete tasks:
+   ```bash
+   ./bin/complete-tasks --summary "<what>" slug1 slug2
+   ```
+5. Auto-invoke `/ship`
+
+---
+
+## Handoff File
+
+Path: `/tmp/claim-tasks-<worktree>.json`
+
+| Field | Set By | Description |
+|-------|--------|-------------|
+| `worktree` | Phase 1 | Worktree name |
+| `main_repo` | Phase 1 | Absolute path to main repo |
+| `tasks[].index` | Phase 1 | 1-based task number |
+| `tasks[].title` | Phase 1 | Exact title from task file |
+| `tasks[].slug` | Phase 1 | Task slug |
+| `tasks[].status` | All | `pending` → `implemented` → `health-checked` → `verified` |
+| `tasks[].files_changed` | Phase 2 | Source files modified |
+| `tasks[].tests_written` | Phase 2 | Test file paths |
+| `tasks[].health_notes` | Phase 2.5 | Code health changes |
 
 ## Conflict Handling
 
-If a claim attempt returns `CLAIMED_BY:<worktree>`:
-- Skip that task and try the next unclaimed one
-- Report the skip in the output
+Status codes from `try-claim`:
+- `CLAIMED` — success
+- `ALREADY_OWNED` — this worktree already owns it
+- `EXPIRED_RECLAIMED` — reclaimed from expired agent
+- `CLAIMED_BY:<wt>` — another active agent owns it (skip)
+- `SHIPPED_BY:<wt>` — in merge queue (skip)
 
-If a claim attempt returns `EXPIRED_RECLAIMED`:
-- Note in the output that a stale claim was reclaimed
-- Proceed with the task
+## Safety Rules
 
-If a claim attempt returns `ALREADY_OWNED`:
-- This worktree already has this task; skip re-claiming
-- Include it in the "your tasks" list
-
-If a claim attempt returns `LOCK_FAILED`:
-- Another agent is actively claiming this exact task right now
-- Skip it and try the next unclaimed task
-- Report the skip in the output (this is rare and transient)
-
-### Lock Directories
-
-The work queue uses `.lock/` directories inside `claims/` for atomic mutual exclusion. These are ephemeral — they exist only during the brief window while a claim is being written. Lock dirs older than 30 seconds are automatically cleaned as stale. You should never need to manually manage `.lock/` directories; they are created and removed by `work-queue.sh` internally.
-
-## Integration
-
-- **Start work**: Run `/claim-tasks` to create a worktree and reserve tasks
-- **After `/ship`**: Claims are marked as shipped (not released) for merge queue tracking
-- **Manual release**: Run `/release-tasks` to give back unclaimed work
-- **Auto-cleanup**: `auto-release-merged` frees claims for PRs that have merged
-
-## Expiration
-
-Claims have a TTL (default: 120 minutes). After the TTL, other agents can reclaim the task. Shipped claims are exempt from TTL expiration — they represent work waiting in the merge queue. To clean up expired claims:
-
-```bash
-scripts/work-queue.sh expire
-```
+1. Never `rm -f` claim files — use `scripts/work-queue.sh release`
+2. Never edit claim JSON files directly
+3. Claims expire after 10 hours (TTL default)
