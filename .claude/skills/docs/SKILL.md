@@ -1,9 +1,9 @@
 ---
 name: docs
-version: 1.0.0
 description: >
-  Reviews documentation and comments for consistency and correctness.
-  Checks README, CLAUDE.md, docstrings, and code comments.
+  Reviews all documentation (root .md files, docs/ directory, code comments,
+  and docstrings) for consistency, correctness, and completeness.
+  Checks cross-references, verifies paths and commands, detects staleness.
   Ensures comments explain "why" implementation choices were made.
 argument-hint: "[check|update] [path]"
 allowed-tools: Read, Glob, Grep, Edit, Write, Bash(git diff *)
@@ -22,7 +22,7 @@ Review and update documentation across the project to ensure consistency, correc
 
 ### 1. Documentation Files
 
-Check these common documentation files:
+#### Root-level docs (always check)
 
 | File | What to Verify |
 |------|----------------|
@@ -32,6 +32,35 @@ Check these common documentation files:
 | `USAGE.md` | If present, usage examples are correct |
 | `CONTRIBUTING.md` | If present, contribution guidelines are current |
 | `CHANGELOG.md` | If present, recent changes are documented |
+
+#### docs/ directory (scan all .md files)
+
+Glob `docs/*.md` and `docs/**/*.md` to discover all documentation files. For each file:
+
+1. **Cross-reference check** — Verify that all internal links (`[text](other-doc.md)`, `[text](../FILE.md)`) resolve to files that exist.
+2. **Command verification** — Extract bash code blocks and verify referenced commands/scripts exist. Do NOT execute commands — just verify the binaries/scripts are present.
+3. **Path verification** — Check that file paths mentioned in prose or code blocks exist in the repo.
+4. **Staleness detection** — Flag docs that reference:
+   - Removed CLI commands or flags
+   - Old directory structures or file paths that no longer exist
+   - Version numbers that don't match `pyproject.toml`
+   - Features described as "planned" or "TODO" that have since been implemented
+5. **Consistency with root docs** — If a `docs/` file describes the same feature as README.md or USAGE.md, check for contradictions (different flags, different defaults, different workflows).
+
+**Prioritization for large docs/ directories (>15 files):**
+- Use parallel agents, each reviewing a batch of 5-8 docs files
+- Operational guides get deeper review since users depend on them for day-to-day work
+- Reference/methodology docs get lighter review (cross-references and paths only)
+
+**Report format for docs/ files:**
+```
+DOCS DIRECTORY (docs/)
+───────────────────────────────────────────────────
+✓ CLI-REFERENCE.md — Commands verified, paths valid
+⚠ OPERATOR-GUIDE.md:45 — References --verbose flag (removed in v0.40)
+✗ API-REFERENCE.md:12 — Links to docs/DEPLOY.md#old-section (anchor missing)
+· methodology.md — Light review only (paths valid, no broken links)
+```
 
 ### 2. Code Comments - The "Why" Not "What"
 
@@ -144,8 +173,11 @@ ruff format .           Format
 ### Phase 1: Scan
 
 ```bash
-# Find documentation files
-find . -maxdepth 2 -name "*.md" -type f
+# Find root-level documentation files
+find . -maxdepth 1 -name "*.md" -type f
+
+# Scan docs/ directory (all markdown files, any depth)
+find docs/ -name "*.md" -type f 2>/dev/null
 
 # Check for QUICKSTART.md specifically (REQUIRED - terminal-friendly orientation file)
 test -f QUICKSTART.md && echo "QUICKSTART.md found" || echo "QUICKSTART.md MISSING (required)"
@@ -159,14 +191,18 @@ grep -E "^version\s*=" pyproject.toml
 
 **IMPORTANT**: If QUICKSTART.md is missing, this is a critical issue that should be flagged immediately and offered to be created.
 
+**IMPORTANT**: All `docs/*.md` files must be included in the review. Do not limit to the root-level files table — the `docs/` directory often contains operational guides, API references, and workflow documentation that users depend on daily.
+
 ### Phase 2: Smart Batching
 
-Based on the number of files found:
+**Documentation files (root + docs/):**
+- Root-level .md files: always checked in main context
+- `docs/` directory with **>10 files**: Use parallel agents (batch 5-8 docs per agent). Operational guides get deeper review.
+- `docs/` directory with **<=10 files**: Sequential analysis in main context
 
-- **>30 Python files**: Use Task tool with parallel general-purpose agents
-  - Split Python files into batches of 15-20
+**Python files:**
+- **>30 Python files**: Use parallel agents (batches of 15-20)
   - Each agent checks: docstrings, comment quality, complexity
-  - Documentation files always checked in main context (usually <10 files)
   - Run agents in parallel for faster analysis
 
 - **15-30 Python files**: Sequential analysis with progress updates
