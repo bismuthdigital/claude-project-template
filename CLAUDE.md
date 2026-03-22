@@ -19,7 +19,9 @@ scripts/                   # Utility scripts
 ├── task-format.py         # Task file parser, validator, and renderer
 ├── task-board.py          # Unified task board aggregation
 ├── worktree-cleanup.sh    # Stale worktree cleanup
-└── sync-all-projects.sh   # Sync config across all repos
+├── sync-main.sh           # Safe fast-forward of local main
+├── sync-all-projects.sh   # Sync config across all repos
+└── test-workers.sh        # Optimal pytest-xdist worker count
 
 bin/                       # Deterministic wrapper scripts
 ├── worktree-info          # Git worktree queries
@@ -27,7 +29,10 @@ bin/                       # Deterministic wrapper scripts
 ├── ci-status              # CI run inspection
 ├── broken-prs             # Discover broken PRs
 ├── fuzzy-match            # Levenshtein task matching
-└── complete-tasks         # Batch task completion
+├── complete-tasks         # Batch task completion
+├── sync-main              # Sync local main with origin
+├── project-info           # Project health and stats summary
+└── test                   # Smart test runner with scoped mode
 
 next-steps/                # Per-task file storage
 ├── _meta.md               # Static header
@@ -59,6 +64,11 @@ pip install -e ".[dev]"
 
 | Command | Description |
 |---------|-------------|
+| `./bin/test` | Run scoped tests (changed files only) |
+| `./bin/test --all` | Run full test suite in parallel |
+| `./bin/test --affected` | Run transitively affected tests |
+| `./bin/project-info` | Full project health summary |
+| `./bin/sync-main` | Safely fast-forward local main |
 | `pytest` | Run all tests |
 | `pytest -v --cov` | Run tests with coverage |
 | `ruff check --fix .` | Lint and auto-fix issues |

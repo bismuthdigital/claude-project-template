@@ -1,0 +1,349 @@
+#!/usr/bin/env bash
+# Run the test suite through the project's virtual environment.
+#
+# Wraps pytest with sensible defaults and tees output so the summary
+# can be read back without re-running the suite.
+#
+# Usage:
+#   ./bin/test                          # scoped tests only — fast (default)
+#   ./bin/test --affected               # transitive import-graph affected tests
+#   ./bin/test --all                    # all tests, parallel (excl. slow)
+#   ./bin/test --full                   # everything including slow
+#   ./bin/test tests/some_dir/          # specific directory
+#   ./bin/test -k test_scoring          # keyword filter
+#   ./bin/test tests/unit/ -v           # extra pytest args pass through
+#
+# Modes (fastest → most thorough):
+#
+#   (default)   Scoped: run the specific test file for each changed source
+#               file, plus any directly-changed test files. Changing
+#               pkg/models.py runs tests/test_models.py — not the full suite.
+#
+#   --affected  Import-graph: full transitive dependency analysis. Every
+#               test that could possibly be affected runs. More thorough
+#               but slower. Good for pre-commit validation.
+#
+#   --pre-merge Affected tests with conservative resources: max 2 workers,
+#               --maxfail=3, runs under nice(1). Designed for concurrent
+#               agents sharing a laptop — catches most bugs without melting
+#               the machine. CI runs the full suite as the real gatekeeper.
+#
+#   --all       Parallel full suite (excluding slow markers).
+#
+#   --full      Everything including slow tests.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+VENV_DIR="${PROJECT_DIR}/.venv"
+PYTEST="${VENV_DIR}/bin/pytest"
+PYTHON="${VENV_DIR}/bin/python"
+# Each invocation gets a unique output file to prevent concurrent overwrites.
+# A stable symlink at /tmp/pytest-output.txt always points to the latest run
+# from this project directory, so `cat /tmp/pytest-output.txt` still works.
+# Worktree-specific symlinks prevent cross-agent collisions.
+OUTPUT_DIR="/tmp/pytest-runs"
+mkdir -p "$OUTPUT_DIR"
+RUN_ID="$(date +%Y%m%d-%H%M%S)-$$"
+OUTPUT_FILE="${OUTPUT_DIR}/pytest-${RUN_ID}.txt"
+SYMLINK="/tmp/pytest-output.txt"
+# Worktree-specific symlink: /tmp/pytest-output-<dirname>.txt
+WT_NAME="$(basename "$PROJECT_DIR")"
+WT_SYMLINK="/tmp/pytest-output-${WT_NAME}.txt"
+
+if [ ! -x "$PYTEST" ]; then
+    echo "Error: pytest not found at ${PYTEST}" >&2
+    echo "Run: cd ${PROJECT_DIR} && python -m venv .venv && .venv/bin/pip install -e '.[dev]'" >&2
+    exit 1
+fi
+
+# Compute worker count (concurrent-agent-aware)
+WORKERS_SCRIPT="${PROJECT_DIR}/scripts/test-workers.sh"
+if [ -f "$WORKERS_SCRIPT" ]; then
+    WORKERS=$(bash "$WORKERS_SCRIPT")
+else
+    WORKERS="auto"
+fi
+
+# Parse our flags vs pytest pass-through args
+MODE=""
+PYTEST_ARGS=()
+
+for arg in "$@"; do
+    case "$arg" in
+        --all)       MODE="all" ;;
+        --full)      MODE="full" ;;
+        --affected)  MODE="affected" ;;
+        --pre-merge) MODE="pre-merge" ;;
+        *)          PYTEST_ARGS+=("$arg") ;;
+    esac
+done
+
+# ── Helper: detect the package name under src/ ─────────────────────────
+#
+# Finds the first Python package directory under src/ (contains __init__.py).
+# Falls back to the first directory under src/ if no __init__.py exists.
+detect_package() {
+    local pkg
+    for pkg in "${PROJECT_DIR}"/src/*/; do
+        [ -d "$pkg" ] || continue
+        [[ "$(basename "$pkg")" == __pycache__ ]] && continue
+        [[ "$(basename "$pkg")" == *.egg-info ]] && continue
+        basename "$pkg"
+        return
+    done
+    echo ""
+}
+
+SRC_PACKAGE=$(detect_package)
+
+# ── Helper: map changed source files to their specific test files ──────
+#
+# For each changed source file, finds the most precise test target:
+#   src/pkg/models.py           → tests/test_models.py
+#   src/pkg/data/integrity.py   → tests/data/test_integrity.py
+#   src/pkg/utils/helpers.py    → tests/utils/test_helpers.py
+#   tests/data/test_store.py    → tests/data/test_store.py (itself)
+#
+scoped_tests() {
+    local base_ref="${1:-}"
+    local changed_tmp
+    changed_tmp=$(mktemp)
+    trap 'rm -f "$changed_tmp"' RETURN
+
+    if [ -n "$base_ref" ]; then
+        git diff --name-only "$base_ref"...HEAD 2>/dev/null > "$changed_tmp" \
+            || git diff --name-only "$base_ref" HEAD > "$changed_tmp"
+    else
+        git diff --name-only HEAD 2>/dev/null > "$changed_tmp" \
+            || git diff --name-only > "$changed_tmp"
+    fi
+
+    [ -s "$changed_tmp" ] || return 0
+
+    local seen=()
+    _emit() {
+        local target="$1"
+        for s in "${seen[@]+"${seen[@]}"}"; do
+            [ "$s" = "$target" ] && return
+        done
+        seen+=("$target")
+        echo "$target"
+    }
+
+    while IFS= read -r f; do
+        [ -z "$f" ] && continue
+
+        # Test files: include themselves
+        if [[ "$f" == tests/*.py && "$f" == *test_* ]]; then
+            _emit "$f"
+            continue
+        fi
+
+        # conftest changes: include the whole directory
+        if [[ "$f" == tests/*/conftest.py ]]; then
+            _emit "$(dirname "$f")/"
+            continue
+        fi
+
+        # Strip src/<package>/ prefix
+        local rel="${f#src/${SRC_PACKAGE}/}"
+        [ "$rel" = "$f" ] && continue  # not under src/<package>/
+        [[ "$rel" != *.py ]] && continue  # skip non-Python files
+        [[ "$rel" == *__init__.py ]] && continue  # skip __init__.py
+
+        # Determine test directory and file for this source
+        local test_dir="" test_file="" base=""
+        local dir_part="${rel%/*}"
+        local file_part="${rel##*/}"
+
+        if [[ "$rel" == */* ]]; then
+            # Nested module: src/pkg/subpkg/module.py
+            # Try tests/subpkg/test_module.py first, then tests/test_subpkg/ patterns
+            base="${file_part%.py}"
+            [[ "$base" == _* ]] && base="${base#_}"  # strip leading underscore
+
+            # Check for matching test directory structures
+            if [ -d "${PROJECT_DIR}/tests/${dir_part}" ]; then
+                test_dir="tests/${dir_part}"
+            elif [ -d "${PROJECT_DIR}/tests/test_${dir_part}" ]; then
+                test_dir="tests/test_${dir_part}"
+            fi
+
+            if [ -n "$test_dir" ]; then
+                test_file="${test_dir}/test_${base}.py"
+            else
+                # No matching test dir — try top-level test file
+                test_file="tests/test_${base}.py"
+            fi
+        else
+            # Top-level module: src/pkg/models.py → tests/test_models.py
+            base="${rel%.py}"
+            test_file="tests/test_${base}.py"
+        fi
+
+        if [ -n "$test_file" ] && [ -e "${PROJECT_DIR}/${test_file}" ]; then
+            _emit "$test_file"
+        elif [ -n "$test_dir" ]; then
+            # Check for split test files (e.g. test_builder_*.py)
+            local base_for_split="${file_part%.py}"
+            [[ "$base_for_split" == _* ]] && base_for_split="${base_for_split#_}"
+            local split_found=false
+            for split_file in "${PROJECT_DIR}/${test_dir}/test_${base_for_split}_"*.py; do
+                if [ -e "$split_file" ]; then
+                    _emit "${test_dir}/$(basename "$split_file")"
+                    split_found=true
+                fi
+            done
+            if [ "$split_found" = false ] && [ -d "${PROJECT_DIR}/${test_dir}" ]; then
+                _emit "${test_dir}/"
+            fi
+        fi
+    done < "$changed_tmp"
+}
+
+# Build the pytest command
+CMD=("$PYTHON" -m pytest --tb=short)
+
+if [ "$MODE" = "all" ]; then
+    CMD+=(-n "$WORKERS" --cov --cov-report=term-missing -q -m "not slow")
+    CMD+=("${PYTEST_ARGS[@]+"${PYTEST_ARGS[@]}"}")
+
+elif [ "$MODE" = "full" ]; then
+    CMD+=(-n "$WORKERS" --cov --cov-report=term-missing -q)
+    CMD+=("${PYTEST_ARGS[@]+"${PYTEST_ARGS[@]}"}")
+
+elif [ "$MODE" = "affected" ] || [ "$MODE" = "pre-merge" ]; then
+    # Transitive import-graph analysis
+    AFFECTED_SCRIPT="${PROJECT_DIR}/scripts/affected-tests.sh"
+    AFFECTED=""
+    if [ -f "$AFFECTED_SCRIPT" ]; then
+        AFFECTED=$(bash "$AFFECTED_SCRIPT" 2>/dev/null) || true
+        if [ -z "$AFFECTED" ]; then
+            AFFECTED=$(bash "$AFFECTED_SCRIPT" --base main 2>/dev/null) || true
+        fi
+    fi
+    if [ -n "$AFFECTED" ]; then
+        if [ "$MODE" = "pre-merge" ]; then
+            # Conservative mode for concurrent agents:
+            # - Cap workers at 2 regardless of CPU count
+            # - Bail after 3 failures (fast feedback)
+            # - Run under nice to yield CPU to implementation agents
+            PM_WORKERS=$((WORKERS < 2 ? WORKERS : 2))
+            CMD+=(-n "$PM_WORKERS" --maxfail=3 -m "not slow" -q)
+            # Prefix with nice to lower scheduling priority
+            CMD=("nice" "-n" "10" "${CMD[@]}")
+            echo "Pre-merge mode: ${PM_WORKERS} workers, maxfail=3, nice=10" >&2
+        else
+            CMD+=(-m "not slow" -v)
+        fi
+        # shellcheck disable=SC2086,SC2206
+        CMD+=($AFFECTED)
+    else
+        echo "No affected tests detected. Run ./bin/test --all for the full suite." >&2
+        exit 0
+    fi
+
+elif [ ${#PYTEST_ARGS[@]} -gt 0 ]; then
+    # Explicit paths or flags — pass through
+    CMD+=("${PYTEST_ARGS[@]}")
+
+else
+    # Default: scoped tests (specific test files for changed sources)
+    SCOPED=$(scoped_tests)
+    if [ -z "$SCOPED" ]; then
+        SCOPED=$(scoped_tests main)
+    fi
+
+    if [ -n "$SCOPED" ]; then
+        echo "Scoped to:" >&2
+        echo "$SCOPED" | while IFS= read -r t; do echo "  $t" >&2; done
+        # shellcheck disable=SC2086,SC2206
+        CMD+=(--maxfail=5 -m "not slow" -v $SCOPED)
+    else
+        echo "No changed files detected. Run ./bin/test --all for the full suite." >&2
+        exit 0
+    fi
+fi
+
+echo "Test output will be written to: ${OUTPUT_FILE}" >&2
+
+# Write invocation header to the output file so it's self-describing
+{
+    echo "# Test Run: ${RUN_ID}"
+    echo "# Date: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    echo "# Working directory: ${PROJECT_DIR}"
+    echo "# Worktree: ${WT_NAME}"
+    echo "# Mode: ${MODE:-scoped}"
+    echo "# Command: ${CMD[*]}"
+    echo "# Git branch: $(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'unknown')"
+    echo "# Git commit: $(git -C "$PROJECT_DIR" rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+    echo "# Python: $($PYTHON --version 2>&1)"
+    echo "# Output file: ${OUTPUT_FILE}"
+    echo "#"
+} > "$OUTPUT_FILE"
+
+# Process-level timeout (5 minutes). pytest-timeout handles per-test limits
+# (30s default), but this catches hangs during collection, fixture setup,
+# worker deadlocks, or any other scenario where the overall process stalls.
+# Override: PROJECT_TEST_TIMEOUT=N (seconds)
+TEST_TIMEOUT="${PROJECT_TEST_TIMEOUT:-300}"
+
+# Portable timeout: prefer GNU timeout/gtimeout, fall back to shell-based.
+# The fallback runs the command in the background with a kill timer.
+_run_with_timeout() {
+    local duration=$1; shift
+    if command -v timeout &>/dev/null; then
+        timeout "$duration" "$@"
+        return $?
+    elif command -v gtimeout &>/dev/null; then
+        gtimeout "$duration" "$@"
+        return $?
+    else
+        # Shell-based fallback for macOS without coreutils
+        "$@" &
+        local cmd_pid=$!
+        ( sleep "$duration" && kill -TERM "$cmd_pid" 2>/dev/null ) &
+        local timer_pid=$!
+        wait "$cmd_pid" 2>/dev/null
+        local rc=$?
+        kill "$timer_pid" 2>/dev/null
+        wait "$timer_pid" 2>/dev/null
+        # Map SIGTERM (143 = 128+15) to 124 to match GNU timeout convention
+        [ "$rc" -eq 143 ] && return 124
+        return "$rc"
+    fi
+}
+
+echo "Running (timeout ${TEST_TIMEOUT}s): ${CMD[*]}" >&2
+# Capture exit code even on test failure (set -e would bail before symlink update)
+set +e
+_run_with_timeout "$TEST_TIMEOUT" "${CMD[@]}" 2>&1 | tee -a "$OUTPUT_FILE"
+EXIT_CODE=${PIPESTATUS[0]}
+set -e
+
+# timeout(1) and our fallback return 124 on expiry
+if [ "$EXIT_CODE" -eq 124 ]; then
+    echo "" >> "$OUTPUT_FILE"
+    echo "# TIMEOUT: test run exceeded ${TEST_TIMEOUT}s limit" >> "$OUTPUT_FILE"
+    echo "" >&2
+    echo "ERROR: test run exceeded ${TEST_TIMEOUT}s timeout (override with PROJECT_TEST_TIMEOUT=N)" >&2
+fi
+
+# Append footer with exit code for programmatic inspection
+echo "" >> "$OUTPUT_FILE"
+echo "# Exit code: ${EXIT_CODE}" >> "$OUTPUT_FILE"
+
+# Update symlinks to point to this run's output (atomic via ln -sf)
+ln -sf "$OUTPUT_FILE" "$SYMLINK"
+ln -sf "$OUTPUT_FILE" "$WT_SYMLINK"
+
+# Clean up old output files (keep last 10)
+# shellcheck disable=SC2012
+find "$OUTPUT_DIR" -name 'pytest-*.txt' -maxdepth 1 2>/dev/null | sort -r | tail -n +11 | xargs rm -f 2>/dev/null || true
+
+echo "" >&2
+echo "Test output written to: ${OUTPUT_FILE}" >&2
+
+exit "$EXIT_CODE"

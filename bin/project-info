@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# Project information and health summary.
+#
+# Gathers stats that multiple skills need (review, cost-estimate,
+# next-steps). Single permission entry: "Bash(./bin/project-info *)".
+#
+# Usage:
+#   ./bin/project-info                 # Full summary
+#   ./bin/project-info version         # Current version + latest tag
+#   ./bin/project-info counts          # Source/test file counts
+#   ./bin/project-info tasks           # Task counts by priority
+#   ./bin/project-info health          # Quick health check (lint, type check)
+#   ./bin/project-info recent          # Recent commits summary
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+cmd="${1:-summary}"
+shift || true
+
+case "$cmd" in
+
+    # ── Version info ──────────────────────────────────────────────────
+    version)
+        VERSION=$(grep -E "^version" "${PROJECT_DIR}/pyproject.toml" | head -1 | sed 's/.*= *"\(.*\)"/\1/')
+        LATEST_TAG=$(cd "$PROJECT_DIR" && git tag -l "v*" --sort=-v:refname 2>/dev/null | head -1 || echo "none")
+        COMMITS_SINCE=""
+        if [[ "$LATEST_TAG" != "none" && -n "$LATEST_TAG" ]]; then
+            COMMITS_SINCE=$(cd "$PROJECT_DIR" && git rev-list --count "${LATEST_TAG}..HEAD" 2>/dev/null || echo "?")
+        fi
+        echo "Version: ${VERSION}"
+        echo "Latest tag: ${LATEST_TAG}"
+        [[ -n "$COMMITS_SINCE" ]] && echo "Commits since tag: ${COMMITS_SINCE}"
+        ;;
+
+    # ── Source and test file counts ───────────────────────────────────
+    counts)
+        SRC_COUNT=$(find "${PROJECT_DIR}/src" -name '*.py' -not -path '*__pycache__*' 2>/dev/null | wc -l | tr -d ' ')
+        TEST_COUNT=$(find "${PROJECT_DIR}/tests" -name '*.py' -not -path '*__pycache__*' 2>/dev/null | wc -l | tr -d ' ')
+        SCRIPT_COUNT=$(find "${PROJECT_DIR}/scripts" -type f 2>/dev/null | wc -l | tr -d ' ')
+        SKILL_COUNT=$(find "${PROJECT_DIR}/.claude/skills" -name 'SKILL.md' 2>/dev/null | wc -l | tr -d ' ')
+        echo "Source files (.py): ${SRC_COUNT}"
+        echo "Test files (.py):   ${TEST_COUNT}"
+        echo "Scripts:            ${SCRIPT_COUNT}"
+        echo "Skills:             ${SKILL_COUNT}"
+        ;;
+
+    # ── Task counts ───────────────────────────────────────────────────
+    tasks)
+        ACTIVE_DIR="${PROJECT_DIR}/next-steps/active"
+        COMPLETED_DIR="${PROJECT_DIR}/next-steps/completed"
+        if [[ -d "$ACTIVE_DIR" ]]; then
+            ACTIVE=$(find "$ACTIVE_DIR" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+            COMPLETED=$(find "$COMPLETED_DIR" -name '*.md' 2>/dev/null | wc -l | tr -d ' ')
+            echo "Active tasks:    ${ACTIVE}"
+            echo "Completed tasks: ${COMPLETED}"
+
+            # Count by priority
+            if [[ "$ACTIVE" -gt 0 ]]; then
+                echo ""
+                echo "By priority:"
+                for priority in high medium low; do
+                    COUNT=$(grep -rl "priority: ${priority}" "$ACTIVE_DIR" 2>/dev/null | wc -l | tr -d ' ')
+                    echo "  ${priority}: ${COUNT}"
+                done
+            fi
+        else
+            echo "No task files found (next-steps/active/ does not exist)"
+        fi
+        ;;
+
+    # ── Quick health check ────────────────────────────────────────────
+    health)
+        echo "=== Lint Status ==="
+        cd "$PROJECT_DIR"
+        RUFF="$(command -v ruff 2>/dev/null || echo .venv/bin/ruff)"
+        [ -x "$RUFF" ] || RUFF="$(git worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')/.venv/bin/ruff"
+        "$RUFF" check . --statistics 2>&1 | tail -5 || echo "(ruff not available)"
+        echo ""
+        echo "=== Type Check ==="
+        MYPY="$(command -v mypy 2>/dev/null || echo .venv/bin/mypy)"
+        [ -x "$MYPY" ] || MYPY="$(git worktree list --porcelain 2>/dev/null | head -1 | sed 's/^worktree //')/.venv/bin/mypy"
+        "$MYPY" src/ --no-error-summary 2>&1 | tail -3 || echo "(mypy not available)"
+        ;;
+
+    # ── Recent commits ────────────────────────────────────────────────
+    recent)
+        LIMIT="${1:-10}"
+        cd "$PROJECT_DIR"
+        git log --oneline "-${LIMIT}" --no-merges
+        ;;
+
+    # ── Full summary ──────────────────────────────────────────────────
+    summary)
+        echo "═══════════════════════════════════════════════════"
+        echo "              PROJECT INFO"
+        echo "═══════════════════════════════════════════════════"
+        echo ""
+        "$0" version
+        echo ""
+        "$0" counts
+        echo ""
+        "$0" tasks
+        echo ""
+        echo "── Recent Commits ──"
+        "$0" recent 5
+        ;;
+
+    # ── Help ──────────────────────────────────────────────────────────
+    help|--help|-h)
+        echo "Usage: ./bin/project-info <command>"
+        echo ""
+        echo "Commands:"
+        echo "  summary   Full project summary (default)"
+        echo "  version   Version + tag info"
+        echo "  counts    Source/test file counts"
+        echo "  tasks     Task counts by priority"
+        echo "  health    Lint + type check status"
+        echo "  recent    Recent commits"
+        ;;
+
+    *)
+        echo "Unknown command: $cmd" >&2
+        echo "Run './bin/project-info help' for usage" >&2
+        exit 1
+        ;;
+esac

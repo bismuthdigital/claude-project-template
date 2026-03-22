@@ -119,9 +119,24 @@ your-project/
 │       ├── sync-config/       # /sync-config
 │       ├── test/              # /test - Run tests
 │       └── version/           # /version - Semantic versioning
+├── bin/
+│   ├── worktree-info          # Git worktree queries
+│   ├── pr                     # GitHub PR operations
+│   ├── ci-status              # CI run inspection
+│   ├── broken-prs             # Discover broken PRs
+│   ├── fuzzy-match            # Levenshtein task matching
+│   ├── complete-tasks         # Batch task completion
+│   ├── sync-main              # Sync local main with origin
+│   ├── project-info           # Project health and stats summary
+│   └── test                   # Smart test runner with scoped mode
 ├── scripts/
 │   ├── work-queue.sh          # Task claiming for concurrent agents
-│   └── sync-all-projects.sh   # Sync config across all repos
+│   ├── task-format.py         # Task file parser, validator, renderer
+│   ├── task-board.py          # Unified task board aggregation
+│   ├── worktree-cleanup.sh    # Stale worktree cleanup
+│   ├── sync-main.sh           # Safe fast-forward of local main
+│   ├── sync-all-projects.sh   # Sync config across all repos
+│   └── test-workers.sh        # Optimal pytest-xdist worker count
 ├── src/your_package/
 ├── tests/
 ├── install.sh                 # Template installer
@@ -148,8 +163,14 @@ Once installed, these skills are available in Claude Code:
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
 | `/prompt-review` | Review AI prompts for quality and suggest improvements |
 | `/next-steps` | Identify and maintain project roadmap |
-| `/claim-tasks` | Claim tasks from NEXT-STEPS.md with auto-worktree |
+| `/claim-tasks` | Claim tasks from backlog with merge-queue execution |
+| `/sprint` | Thin wrapper over claim-tasks with resume detection |
 | `/release-tasks` | Release claimed tasks back to the work queue |
+| `/code-health` | Active code review — read, diagnose, and fix quality issues |
+| `/simplify` | Review changed code for reuse, quality, and efficiency |
+| `/worktree-cleanup` | Clean up stale worktrees and reclaim disk space |
+| `/ci-review` | Diagnose GitHub Actions CI failures and suggest fixes |
+| `/fix-failed-pr` | Batch-fix broken PRs with combine mode |
 | `/init-from-template` | Create a new project from this template (local only) |
 | `/init-project` | Create a new project with GitHub repository |
 | `/sync-config` | Compare your config against latest template |
