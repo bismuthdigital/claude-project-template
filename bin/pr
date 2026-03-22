@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+# Deterministic wrapper for PR operations used by the /ship skill.
+#
+# Consolidates gh CLI interactions into a single script so that
+# permissions can be granted once via settings.json ("Bash(./bin/pr *)").
+# Prevents Claude from improvising different command patterns that each
+# need separate permission approval.
+#
+# Usage:
+#   ./bin/pr create --title "My PR" --body-file /tmp/td-pr-body.md
+#   ./bin/pr exists                     # exit 0 if PR exists, 1 if not
+#   ./bin/pr number                     # print PR number
+#   ./bin/pr url                        # print PR URL
+#   ./bin/pr checks                     # watch CI checks (--fail-fast)
+#   ./bin/pr merge [--auto]             # squash merge (--auto for merge queue)
+#   ./bin/pr mark-shipped               # mark work-queue claims as shipped
+#   ./bin/pr release-claims             # release work-queue claims
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORK_QUEUE="${PROJECT_DIR}/scripts/work-queue.sh"
+
+cmd="${1:-help}"
+shift || true
+
+case "$cmd" in
+
+    # ── Create or update a PR ─────────────────────────────────────────
+    create)
+        TITLE=""
+        BODY_FILE=""
+        while [[ $# -gt 0 ]]; do
+            case "$1" in
+                --title)   TITLE="$2"; shift 2 ;;
+                --body-file) BODY_FILE="$2"; shift 2 ;;
+                *) echo "Unknown option: $1" >&2; exit 1 ;;
+            esac
+        done
+        if [[ -z "$TITLE" ]]; then
+            echo "Error: --title is required" >&2
+            exit 1
+        fi
+        if [[ -z "$BODY_FILE" ]]; then
+            echo "Error: --body-file is required" >&2
+            exit 1
+        fi
+        if [[ ! -f "$BODY_FILE" ]]; then
+            echo "Error: body file not found: $BODY_FILE" >&2
+            exit 1
+        fi
+        # If a PR already exists, update it; otherwise create a new one
+        if gh pr view --json number >/dev/null 2>&1; then
+            gh pr edit --title "$TITLE" --body-file "$BODY_FILE"
+            echo "Updated existing PR: $(gh pr view --json url --jq '.url')"
+        else
+            gh pr create --title "$TITLE" --body-file "$BODY_FILE"
+        fi
+        ;;
+
+    # ── Check if a PR exists for this branch ─────────────────────────
+    exists)
+        gh pr view --json number >/dev/null 2>&1
+        ;;
+
+    # ── Print PR number ──────────────────────────────────────────────
+    number)
+        gh pr view --json number --jq '.number'
+        ;;
+
+    # ── Print PR URL ─────────────────────────────────────────────────
+    url)
+        gh pr view --json url --jq '.url'
+        ;;
+
+    # ── Watch CI checks ──────────────────────────────────────────────
+    checks)
+        gh pr checks --watch --fail-fast
+        ;;
+
+    # ── Merge the PR ─────────────────────────────────────────────────
+    merge)
+        if [[ "${1:-}" == "--auto" ]]; then
+            # Merge queue mode: enable auto-merge, don't wait
+            gh pr merge --squash --auto
+        else
+            # Direct merge: wait for checks, delete branch
+            gh pr merge --squash --delete-branch
+        fi
+        ;;
+
+    # ── Mark work-queue claims as shipped ────────────────────────────
+    mark-shipped)
+        if [[ ! -f "$WORK_QUEUE" ]]; then
+            echo "Work queue script not found, skipping" >&2
+            exit 0
+        fi
+        PR_NUMBER=$(gh pr view --json number --jq '.number')
+        PR_URL=$(gh pr view --json url --jq '.url')
+        bash "$WORK_QUEUE" mark-shipped "$PR_NUMBER" "$PR_URL"
+        ;;
+
+    # ── Release work-queue claims ────────────────────────────────────
+    release-claims)
+        if [[ ! -f "$WORK_QUEUE" ]]; then
+            echo "Work queue script not found, skipping" >&2
+            exit 0
+        fi
+        bash "$WORK_QUEUE" release-all
+        ;;
+
+    # ── Clean up review artifacts for a task slug ────────────────────
+    clean-review)
+        SLUG="${1:-}"
+        if [[ -z "$SLUG" ]]; then
+            echo "Error: task slug required" >&2
+            exit 1
+        fi
+        if [[ ! -f "$WORK_QUEUE" ]]; then
+            exit 0
+        fi
+        bash "$WORK_QUEUE" clean-review "$SLUG"
+        ;;
+
+    # ── Help ─────────────────────────────────────────────────────────
+    help|--help|-h)
+        echo "Usage: ./bin/pr <command> [options]"
+        echo ""
+        echo "Commands:"
+        echo "  create --title TITLE --body-file FILE   Create a PR"
+        echo "  exists                                  Check if PR exists (exit code)"
+        echo "  number                                  Print PR number"
+        echo "  url                                     Print PR URL"
+        echo "  checks                                  Watch CI checks"
+        echo "  merge [--auto]                          Squash merge (--auto for queue)"
+        echo "  mark-shipped                            Mark claims as shipped"
+        echo "  release-claims                          Release work-queue claims"
+        echo "  clean-review SLUG                       Clean review artifacts"
+        ;;
+
+    *)
+        echo "Unknown command: $cmd" >&2
+        echo "Run './bin/pr help' for usage" >&2
+        exit 1
+        ;;
+esac

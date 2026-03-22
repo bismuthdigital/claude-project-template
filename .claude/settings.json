@@ -86,7 +86,34 @@
       "Bash(*/task-format.py *)",
       "Bash(gh run *)",
       "Bash(gh run list *)",
-      "Bash(gh run view *)"
+      "Bash(gh run view *)",
+      "Agent",
+      "Bash(.venv/bin/python *)",
+      "Bash(.venv/bin/pip *)",
+      "Bash(./bin/worktree-info *)",
+      "Bash(./bin/pr *)",
+      "Bash(./bin/ci-status *)",
+      "Bash(./bin/broken-prs)",
+      "Bash(./bin/broken-prs *)",
+      "Bash(./bin/fuzzy-match *)",
+      "Bash(./bin/complete-tasks)",
+      "Bash(./bin/complete-tasks *)",
+      "Bash(*/worktree-cleanup.sh *)",
+      "Bash(*/task-board.py *)",
+      "Bash(.venv/bin/python scripts/task-board.py *)",
+      "Bash(git rebase *)",
+      "Bash(git rev-parse *)",
+      "Bash(git reset *)",
+      "Bash(git merge *)",
+      "Bash(git -C *)",
+      "Bash(git remote *)",
+      "Bash(git hash-object *)",
+      "Bash(du *)",
+      "Edit(**.md)",
+      "Write(**.md)",
+      "Write(**.sh)",
+      "Write(/tmp/**)",
+      "Read(/tmp/**)"
     ],
     "deny": [
       "Read(.env)",
@@ -106,6 +133,19 @@
     ]
   },
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/worktree-check.sh\"",
+            "timeout": 30,
+            "statusMessage": "Checking worktree venv..."
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",

@@ -1007,9 +1007,16 @@ def _task_file_to_entry(filepath: Path) -> TaskEntry:  # noqa: PLR0912, PLR0915
     # Use frontmatter priority, fall back to section-based inference
     priority = fm.get("priority")
 
+    # Infer state from directory — files in completed/ are completed
+    # regardless of what the frontmatter says
+    if filepath.parent.name == "completed":
+        state = "completed"
+    else:
+        state = fm.get("status", "pending")
+
     return TaskEntry(
         id=fm.get("id"),
-        state=fm.get("status", "pending"),
+        state=state,
         roles=roles,
         title=title,
         description=description,
