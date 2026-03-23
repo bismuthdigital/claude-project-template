@@ -2,7 +2,7 @@
 
 ## Overview
 
-A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 24 custom skills — so you can start building immediately with sensible defaults.
+A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 27 custom skills — so you can start building immediately with sensible defaults.
 
 ## Architecture
 
@@ -43,8 +43,9 @@ next-steps/                # Per-task file storage
 .claude/
 ├── settings.json          # Permissions and hooks
 ├── ship.json              # Ship workflow settings
+├── plans/                 # Knowledge artifacts from /capture
 ├── hooks/                 # Auto-linting, venv activation, worktree isolation
-└── skills/                # 24 skill definitions
+└── skills/                # 27 skill definitions
 
 install.sh                 # Template installer
 ```
@@ -109,6 +110,29 @@ pip install -e ".[dev]"
 - Always log exceptions before re-raising
 - Use context managers for resources
 
+## Knowledge Preservation
+
+The project has two shipping lanes: **code** (via `/ship`) and **knowledge** (via `/capture`). Conversations produce both.
+
+| Layer | Location | Purpose | Created by |
+|-------|----------|---------|------------|
+| Plans | `.claude/plans/` | Strategic decisions, research, design rationale | `/capture` |
+| Plans Index | `.claude/plans/INDEX.md` | Discoverable entry point for all plan files | `/capture` |
+| Memory | `~/.claude/projects/.../memory/` | Cross-conversation context (Claude-private) | Auto-memory |
+| Tasks | `next-steps/active/` | Work items that reference plans for context | Task creation |
+| Docs | `docs/` | Operational docs, research methodology | Manual |
+
+**Workflow for planning conversations:**
+1. Discuss, iterate, decide
+2. `/capture` — synthesize findings into `.claude/plans/<slug>.md`
+3. Create tasks that reference the plan: `--body "Context: see .claude/plans/<slug>.md"`
+4. `/ship` — commit and merge (if there are code changes)
+5. `/cleanup` — verify nothing is lost before exiting
+
+**When to use `/capture` vs memory:**
+- `/capture`: decisions, research, plans that future agents/reviewers need to *discover* in the codebase
+- Memory: user preferences, behavioral feedback, project status that Claude needs across conversations
+
 ## Claude Skills
 
 This project includes Claude Code skills for development:
@@ -124,8 +148,11 @@ This project includes Claude Code skills for development:
 | `/init-from-template` | Create new project from template (local only) |
 | `/init-project` | Create new project with GitHub repository |
 | `/sync-config` | Compare config against template |
+| `/port-from-project` | Port skills/scripts from downstream projects into template |
 | `/comic` | Generate SVG explainer comics about the project |
 | `/ship` | Commit, PR, merge, and sync local repo |
+| `/capture` | Ship knowledge artifacts to `.claude/plans/` |
+| `/cleanup` | Pre-exit safety check for worktrees |
 | `/version` | Bump version, create and push git tag |
 | `/claim-tasks` | Claim tasks from backlog with 4-phase merge-queue execution |
 | `/sprint` | Thin wrapper over claim-tasks with resume detection |
