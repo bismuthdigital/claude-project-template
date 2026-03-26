@@ -118,16 +118,44 @@ run_sync() {
 
     echo "[START] $name"
 
-    # Multi-step prompt: sync config, apply all updates, then ship
+    # Multi-step prompt: sync config, apply safe updates, then ship
     local prompt
     prompt=$(cat <<'PROMPT'
 Run /sync-config to compare this project against the template.
 
-After the report is generated:
-- If there are updates available, apply all of them ("apply all").
-- If there are no differences, say "Already up to date" and stop.
+After the report is generated, apply updates with these safety rules:
 
-After applying updates, ship the changes:
+SAFE TO APPLY AUTOMATICALLY:
+- New permissions (allow/deny rules) from the template
+- New hooks that don't exist locally
+- New skills that don't exist locally
+- Updated bin/ scripts (e.g., hardcoded repo names → dynamic detection)
+- New utility scripts from the template
+- Updated pyproject.toml tool configurations (ruff rules, pytest, mypy)
+- New .gitignore patterns
+
+DO NOT OVERWRITE — SKIP THESE:
+- Skills that exist in BOTH the project AND the template, when the project
+  version has project-specific customizations (references to project-specific
+  CLI commands, domain terminology, project-specific paths like src/<project>/,
+  seed data checks, custom test directories, domain-specific fixture guidance).
+  The template version is generalized — overwriting loses project-specific
+  context that agents need.
+- Hooks that exist locally with project-specific logic (e.g., references to
+  project-specific commands or paths)
+- Any file where the local version is NEWER than the template (LOCAL_NEWER)
+- Settings.json permissions that reference project-specific tools (e.g.,
+  ./bin/td, ./bin/seed-stats) — keep these, only ADD new template permissions
+
+HOW TO DECIDE: If a skill/script exists in both places, compare them. If the
+local version contains ANY project-specific references not in the template
+(domain terms, project paths, custom CLI tools, domain-specific test rules),
+KEEP the local version and skip the update. Only overwrite if the files are
+functionally identical or the local version is a strict subset of the template.
+
+If there are no safe updates to apply, say "Already up to date" and stop.
+
+After applying safe updates, ship the changes:
 - If the /ship skill is available, run /ship with commit message "Sync Claude config with template".
 - If /ship is not available, do it manually:
   1. git checkout -b sync-config-update
