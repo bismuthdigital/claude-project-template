@@ -150,6 +150,17 @@
             "statusMessage": "Checking worktree venv..."
           }
         ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/task-guard.sh\"",
+            "timeout": 5,
+            "statusMessage": "Checking task file guard..."
+          }
+        ]
       }
     ],
     "PostToolUse": [

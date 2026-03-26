@@ -94,6 +94,7 @@ class TaskEntry:
     subsection: str | None = None
     line_number: int = 0
     raw_lines: list[str] = field(default_factory=list)
+    action: str | None = None  # "human" if requires manual action by project owner
     separator: str = "—"  # Track which separator was used
 
 
@@ -1027,6 +1028,7 @@ def _task_file_to_entry(filepath: Path) -> TaskEntry:  # noqa: PLR0912, PLR0915
         sprint_number=sprint_number,
         sprint_date=sprint_date,
         section=fm.get("section", ""),
+        action=fm.get("action"),
         line_number=0,
         raw_lines=[],
     )
@@ -1070,6 +1072,8 @@ def _write_task_file(  # noqa: PLR0912
     if task.priority:
         fm_lines.append(f"priority: {task.priority}")
     fm_lines.append(f"status: {task.state}")
+    if task.action == "human":
+        fm_lines.append("action: human")
     if task.sprint_number:
         fm_lines.append(f"sprint: {task.sprint_number}")
     else:

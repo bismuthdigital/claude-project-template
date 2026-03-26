@@ -72,6 +72,9 @@ class BoardTask:
     files: list[str]
     dependencies: list[str]
     blocked_by: list[str]
+    action: str | None = None  # "human" if requires manual action
+    description: str = ""  # First line of task body for context
+    is_depended_on: bool = False  # True if other pending tasks depend on this
     claim: ClaimInfo | None = None
     cluster_id: int | None = None
 
@@ -266,9 +269,22 @@ def resolve_tasks(  # noqa: PLR0912
                 files=t.files,
                 dependencies=t.dependencies,
                 blocked_by=blocked_by,
+                action=getattr(t, "action", None),
+                description=t.description or "",
                 claim=claim_info,
             )
         )
+
+    # Compute is_depended_on: mark tasks that other pending tasks depend on
+    all_slugs = {bt.slug for bt in board}
+    for bt in board:
+        for dep in bt.dependencies:
+            if dep in all_slugs:
+                # Find the depended-on task and mark it
+                for other in board:
+                    if other.slug == dep:
+                        other.is_depended_on = True
+
     return board
 
 
@@ -720,10 +736,11 @@ def _format_task_compact(bt: BoardTask) -> str:
             suffix_colored = " " + C.red(dep_text)
 
     # Prepend task ID if available (e.g., "T1140")
+    # Bold if other tasks depend on this one; dim otherwise
     id_prefix = ""
     id_prefix_w = 0
     if bt.id:
-        id_prefix = C.dim(bt.id) + " "
+        id_prefix = (C.bold(bt.id) if bt.is_depended_on else C.dim(bt.id)) + " "
         id_prefix_w = len(bt.id) + 1
 
     ind_w = _status_indicator_width()
@@ -861,6 +878,11 @@ def display_human(
 
     _print_legend()
     print()
+
+    # "Your Turn" section — human-action tasks at the top
+    human_tasks = [bt for bt in board if bt.action == "human"]
+    if human_tasks:
+        _display_your_turn(human_tasks)
 
     if show_clusters:
         _display_clusters(board, clusters)
@@ -1002,6 +1024,36 @@ def _display_clusters(board: list[BoardTask], clusters: list[dict]) -> None:
         for bt in sorted(unlinked, key=lambda t: t.title):
             print(_format_task_compact(bt))
         print()
+
+
+def _display_your_turn(human_tasks: list[BoardTask]) -> None:
+    """Display the 'Your Turn' section for human-action tasks."""
+    w = min(TERM_WIDTH, 51)
+    border = "\u2550" * w
+    n = len(human_tasks)
+    label = f"{n} task{'s' if n != 1 else ''} waiting for you"
+    print(C.bold_yellow(border))
+    print(C.bold_yellow(f"  YOUR TURN  ({label})"))
+    print(C.bold_yellow(border))
+    print()
+    for bt in sorted(
+        human_tasks,
+        key=lambda t: (
+            {"high": 0, "medium": 1, "low": 2}.get(t.priority or "medium", 1),
+            t.title,
+        ),
+    ):
+        bullet = "\u25cf" if bt.priority == "high" else "\u25cb"
+        tid = bt.id or ""
+        pri = bt.priority or "medium"
+        # Format: bullet + title on left, task ID + priority on right
+        left = f"  {bullet} {bt.title}"
+        right = f"{tid}  {pri}"
+        pad = max(1, TERM_WIDTH - len(left) - len(right) - 2)
+        print(f"{left}{' ' * pad}{C.dim(right)}")
+        if bt.description:
+            print(f"    {C.dim(bt.description[:TERM_WIDTH - 6])}")
+    print()
 
 
 def _display_role_summary(summary: dict) -> None:

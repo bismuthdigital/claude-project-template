@@ -2,7 +2,7 @@
 
 ## Overview
 
-A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 27 custom skills — so you can start building immediately with sensible defaults.
+A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 28 custom skills — so you can start building immediately with sensible defaults.
 
 ## Architecture
 
@@ -44,8 +44,8 @@ next-steps/                # Per-task file storage
 ├── settings.json          # Permissions and hooks
 ├── ship.json              # Ship workflow settings
 ├── plans/                 # Knowledge artifacts from /capture
-├── hooks/                 # Auto-linting, venv activation, worktree isolation
-└── skills/                # 27 skill definitions
+├── hooks/                 # Auto-linting, venv activation, worktree isolation, task guard
+└── skills/                # 28 skill definitions
 
 install.sh                 # Template installer
 ```
@@ -163,6 +163,7 @@ This project includes Claude Code skills for development:
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
 | `/prompt-review` | Review AI prompts for quality and suggest improvements |
 | `/next-steps` | Identify, consolidate, and maintain project next steps |
+| `/technical-review` | Generate codebase orientation artifacts for backlog tasks |
 | `/ci-review` | Diagnose GitHub Actions CI failures and suggest fixes |
 | `/fix-failed-pr` | Batch-fix broken PRs with combine mode |
 | `/aws-manifest` | Generate AWS infrastructure manifest |
