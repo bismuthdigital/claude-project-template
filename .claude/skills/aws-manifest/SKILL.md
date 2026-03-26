@@ -1,25 +1,27 @@
 ---
 name: aws-manifest
-version: 1.0.0
+version: 1.1.0
 description: >
   Generates an AWS application manifest (docs/aws-manifest.md) declaring the
-  project's infrastructure needs for provisioning via Terraform/Terragrunt.
+  project's infrastructure needs for provisioning by bismuth-aws-org.
 argument-hint: "[application type, e.g. static-site, api, fullstack]"
 allowed-tools: Read, Write, Edit, Glob, Grep, Bash(ls *), Bash(git remote *), AskUserQuestion
 ---
 
 # AWS Application Manifest Generator
 
-Generate a `docs/aws-manifest.md` file that declares this project's AWS infrastructure needs.
+Generate a `docs/aws-manifest.md` file that declares this project's AWS infrastructure needs, following the [AWS Manifest Spec v1](https://github.com/bismuthdigital/bismuth-aws-org/blob/main/docs/aws-manifest-spec.md).
 
 **First**, print the version banner:
 ```
-/aws-manifest v1.0.0
+/aws-manifest v1.1.0
 ```
 
 ## Purpose
 
-The manifest documents the project's AWS infrastructure requirements in a structured format that can be consumed by a Terraform/Terragrunt repository to provision resources. It must be accurate, complete, and follow the spec below.
+The manifest is a **desired-state declaration** — it describes what infrastructure the application needs, not what exists today. It is consumed by [bismuth-aws-org](https://github.com/bismuthdigital/bismuth-aws-org) to provision Terraform/Terragrunt infrastructure.
+
+**Key principle:** The manifest says "I need X" — it never says "X is done." Infrastructure status lives in bismuth-aws-org (Terraform state) and is queried at provisioning time, not tracked in this file. Status tables, deployment readiness checklists, and checkmark/cross indicators do not belong in the manifest.
 
 ## Process
 
@@ -57,12 +59,11 @@ Ask the user the following questions (skip any that are already answered by the 
 
 **Required information:**
 - Project name (human-readable)
-- Project tag (short kebab-case, used in resource naming like `{org}-{tag}-{env}-{region}`)
+- Project tag (short kebab-case, used in resource naming like `bismuth-{tag}-{env}-{region}`)
 - Environments needed (QA, Production, Staging — comma-separated)
 - Primary AWS region (default: `us-east-1`)
 - Deployment method (CLI tool, CI/CD, manual)
 - Domains (if any, per environment)
-- Infrastructure repo (Terraform/Terragrunt repo that will provision these resources, if any)
 
 **Per application type, also ask about:**
 
@@ -103,7 +104,7 @@ Create `docs/aws-manifest.md` with ALL required sections from the spec.
 <!-- manifest-spec: v1 -->
 # AWS Application Manifest — {Project Name}
 
-> Infrastructure requirements for provisioning via Terraform/Terragrunt.
+> For use by [bismuth-aws-org](https://github.com/bismuthdigital/bismuth-aws-org) to provision infrastructure.
 ```
 
 #### Required Sections
@@ -113,39 +114,40 @@ Create `docs/aws-manifest.md` with ALL required sections from the spec.
 1. **Application Overview** — metadata table with all 7 required fields
 2. **Hosting Requirements** — service categories with per-environment resource tables
 3. **Deployment Integration** — config mapping, publisher behavior, IAM permissions
-4. **Dependencies** — status tracking table (use ❌ Not built for new infrastructure)
-5. **Cost Estimate** — per-resource costs with per-environment and grand totals
-6. **Non-Requirements** — explicitly state what is NOT needed
+4. **Cost Estimate** — per-resource costs with per-environment and grand totals
+5. **Non-Requirements** — explicitly state what is NOT needed
 
 #### Recommended Optional Sections (include when relevant)
 
-- **Proposed Terragrunt Layout** — where infra lives in the infrastructure repo
+- **Proposed Terragrunt Layout** — where infra lives in bismuth-aws-org
 - **Expected Module Outputs** — Terraform outputs the app needs
 - **Auth Progression Plan** — if auth evolves over time
 
 ### 5. Apply Conventions
 
-Use these naming conventions (customize the `{org}` prefix to match the project's organization):
+These conventions are mandatory:
 
-| Convention | Rule | Example |
-|-----------|------|---------|
-| Bucket naming | `{org}-{project-tag}-{env}-{region}` | `acme-webapp-prod-us-east-1` |
-| Resource tagging | `Project = "{org}-{project-tag}"` | `Project = "acme-webapp"` |
-| Environment names | `qa` and `prod` (lowercase) in resource names | |
-| Design principles | No cross-account access; workload isolation; minimize costs | |
+| Convention | Rule |
+|-----------|------|
+| Bucket naming | `bismuth-{project-tag}-{env}-{region}` |
+| Resource tagging | `Project = "bismuth-{project-tag}"` |
+| Environment names | `qa` and `prod` (lowercase) in resource names |
+| DNS zone references | Use bismuth-aws-org paths if zones exist |
+| Design principles | No cross-account access; workload isolation; minimize costs |
 
 ### 6. Validate and Report
 
 After writing the manifest, verify:
-- [ ] All 6 required sections are present
+- [ ] All 5 required sections are present
 - [ ] Application Overview table has all 7 fields
 - [ ] Bucket names follow naming convention
 - [ ] Every service has per-environment resource tables
-- [ ] Dependencies table uses correct status indicators (✅ ⏳ ❌ ❓)
 - [ ] Cost estimate includes per-environment and grand total
 - [ ] Non-Requirements section explicitly states what's excluded
 - [ ] `<!-- manifest-spec: v1 -->` version tag is at the top
 - [ ] No cross-account access patterns (Design Principle #1)
+- [ ] No status indicators — manifest is desired state only
+- [ ] No "Infrastructure Status" or "Dependencies" status tables
 
 ## Output
 
@@ -164,6 +166,6 @@ Report:
 ### Next Steps
 1. Review the manifest for accuracy
 2. Commit and push to the project repo
-3. Open an issue or PR in your infrastructure repo referencing this manifest
+3. Open an issue or PR in bismuth-aws-org referencing this manifest
 
 If any information was assumed or estimated, call it out explicitly so the user can verify.
