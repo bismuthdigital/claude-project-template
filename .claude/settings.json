@@ -115,6 +115,15 @@
       "Bash(git remote *)",
       "Bash(git hash-object *)",
       "Bash(du *)",
+      "Bash(cat *)",
+      "Bash(wc *)",
+      "Bash(head *)",
+      "Bash(tail *)",
+      "Bash(find *)",
+      "Bash(grep *)",
+      "Bash(for *)",
+      "Bash(PR_NUMBER=*)",
+      "Bash(.venv/bin/python -m pytest *)",
       "Edit(**.md)",
       "Write(**.md)",
       "Write(**.sh)",
@@ -148,6 +157,12 @@
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/worktree-check.sh\"",
             "timeout": 30,
             "statusMessage": "Checking worktree venv..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/no-skip-ci.sh\"",
+            "timeout": 5,
+            "statusMessage": "Checking for [skip ci]..."
           }
         ]
       },
