@@ -1,6 +1,5 @@
 ---
 name: aws-manifest
-version: 1.1.0
 description: >
   Generates an AWS application manifest (docs/aws-manifest.md) declaring the
   project's infrastructure needs for provisioning by bismuth-aws-org.
@@ -14,7 +13,7 @@ Generate a `docs/aws-manifest.md` file that declares this project's AWS infrastr
 
 **First**, print the version banner:
 ```
-/aws-manifest v1.1.0
+/aws-manifest
 ```
 
 ## Purpose

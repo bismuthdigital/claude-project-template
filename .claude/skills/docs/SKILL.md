@@ -48,7 +48,7 @@ Glob `docs/*.md` and `docs/**/*.md` to discover all documentation files. For eac
 5. **Consistency with root docs** — If a `docs/` file describes the same feature as README.md or USAGE.md, check for contradictions (different flags, different defaults, different workflows).
 
 **Prioritization for large docs/ directories (>15 files):**
-- Use parallel agents, each reviewing a batch of 5-8 docs files
+- Fan out parallel subagents via the **Agent tool** (`subagent_type: general-purpose`), each reviewing a batch of 5-8 docs files. For a deterministic, structured fan-out, the **Workflow tool** (`pipeline`/`parallel`) is the current-era alternative.
 - Operational guides get deeper review since users depend on them for day-to-day work
 - Reference/methodology docs get lighter review (cross-references and paths only)
 
@@ -197,11 +197,11 @@ grep -E "^version\s*=" pyproject.toml
 
 **Documentation files (root + docs/):**
 - Root-level .md files: always checked in main context
-- `docs/` directory with **>10 files**: Use parallel agents (batch 5-8 docs per agent). Operational guides get deeper review.
+- `docs/` directory with **>10 files**: fan out parallel subagents (Agent tool, `subagent_type: general-purpose`), batch 5-8 docs per agent. Operational guides get deeper review.
 - `docs/` directory with **<=10 files**: Sequential analysis in main context
 
 **Python files:**
-- **>30 Python files**: Use parallel agents (batches of 15-20)
+- **>30 Python files**: fan out parallel subagents (Agent tool), batches of 15-20
   - Each agent checks: docstrings, comment quality, complexity
   - Run agents in parallel for faster analysis
 
@@ -259,7 +259,7 @@ For each other issue found:
 ## Output Format
 
 ```
-/docs v1.0.0
+/docs
 ═══════════════════════════════════════════════════
          DOCUMENTATION REVIEW
 ═══════════════════════════════════════════════════

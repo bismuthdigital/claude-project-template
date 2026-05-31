@@ -6,8 +6,8 @@ A reusable Claude Code configuration template for Python projects. Provides sens
 
 - **No prompts for safe operations** - Edit Python files, run tests/linters, search docs without interruption
 - **Auto-linting** - Runs ruff after every file edit
-- **Code review reminders** - Suggests `/review` after implementation work
-- **Custom skills** - `/lint`, `/test`, `/review`, `/check`, `/docs`, `/bash-review`, `/comic`, `/ship`, `/version`, `/cost-estimate`, `/sync-config` and more
+- **Worktree & venv automation** - Auto-creates a venv in new worktrees and activates the right environment before every command
+- **Custom skills** - `/lint`, `/test`, `/review`, `/check`, `/docs`, `/bash-review`, `/ship`, `/capture`, `/sync-config` and more, layered on top of built-in `/code-review` and `/simplify`
 - **Python tooling** - Pre-configured ruff, pytest, coverage, and mypy
 
 ## Installation
@@ -94,31 +94,17 @@ This installs ruff, pytest, pytest-cov, and mypy.
 your-project/
 ├── .claude/
 │   ├── settings.json          # Permissions and hooks
-│   ├── hooks/
+│   ├── hooks/                 # PreToolUse + PostToolUse automation
 │   │   ├── lint-format.sh     # Auto-runs ruff after edits
-│   │   ├── config-suggest.sh  # Suggests /sync-config
-│   │   └── venv-activate.sh   # Shared venv activation (6 strategies)
+│   │   ├── venv-activate.sh   # Shared venv activation (6 strategies)
+│   │   ├── worktree-check.sh  # Ensures a venv exists in new worktrees
+│   │   ├── worktree-setup.sh  # Creates the venv for a fresh worktree
+│   │   ├── task-guard.sh      # Guards next-steps/ task files
+│   │   ├── no-skip-ci.sh      # Blocks [skip ci] in commits
+│   │   └── config-suggest.sh  # Suggests /sync-config after config edits
 │   ├── ship.json              # Ship workflow settings
-│   └── skills/
-│       ├── aws-manifest/      # /aws-manifest - AWS infra declaration
-│       ├── bash-review/       # /bash-review - Shell script analysis
-│       ├── check/             # /check - Full validation
-│       ├── claim-tasks/       # /claim-tasks - Claim work + auto-worktree
-│       ├── comic/             # /comic - SVG explainer comics
-│       ├── cost-estimate/     # /cost-estimate - API cost analysis
-│       ├── docs/              # /docs - Documentation review
-│       ├── init-from-template/ # /init-from-template
-│       ├── init-project/      # /init-project - New project + GitHub repo
-│       ├── lint/              # /lint - Run linters
-│       ├── model-alternatives/ # /model-alternatives - Free model replacements
-│       ├── next-steps/        # /next-steps - Project roadmap management
-│       ├── prompt-review/     # /prompt-review - AI prompt quality review
-│       ├── release-tasks/     # /release-tasks - Release claimed tasks
-│       ├── review/            # /review - Code review
-│       ├── ship/              # /ship - Commit, PR, merge workflow
-│       ├── sync-config/       # /sync-config
-│       ├── test/              # /test - Run tests
-│       └── version/           # /version - Semantic versioning
+│   ├── plans/                 # Knowledge artifacts from /capture
+│   └── skills/                # 27 custom skills (see "Available Skills" below)
 ├── bin/
 │   ├── worktree-info          # Git worktree queries
 │   ├── pr                     # GitHub PR operations
@@ -150,14 +136,16 @@ your-project/
 
 Once installed, these skills are available in Claude Code:
 
+These 27 custom skills layer on top of the built-in Claude Code skills (`/code-review`, `/simplify`, `/verify`, `/security-review`, `/deep-research`, …) — they don't replace them.
+
 | Skill | Description |
 |-------|-------------|
 | `/lint` | Run ruff check, ruff format, and mypy |
 | `/test` | Run pytest with coverage reporting |
-| `/review` | Review code for bugs and common issues |
+| `/review` | Project review lens (resiliency + venv hygiene) atop built-in `/code-review` |
 | `/bash-review` | Review bash scripts for issues |
 | `/docs` | Review documentation and comments for consistency |
-| `/check` | Full validation: lint → test → review → docs → bash-review |
+| `/check` | Full validation: lint → test → code-review → docs → bash-review |
 | `/comic` | Generate SVG explainer comics about the project |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
@@ -166,15 +154,17 @@ Once installed, these skills are available in Claude Code:
 | `/claim-tasks` | Claim tasks from backlog with merge-queue execution |
 | `/sprint` | Thin wrapper over claim-tasks with resume detection |
 | `/release-tasks` | Release claimed tasks back to the work queue |
-| `/code-health` | Active code review — read, diagnose, and fix quality issues |
-| `/simplify` | Review changed code for reuse, quality, and efficiency |
 | `/worktree-cleanup` | Clean up stale worktrees and reclaim disk space |
 | `/ci-review` | Diagnose GitHub Actions CI failures and suggest fixes |
 | `/fix-failed-pr` | Batch-fix broken PRs with combine mode |
 | `/init-from-template` | Create a new project from this template (local only) |
 | `/init-project` | Create a new project with GitHub repository |
 | `/sync-config` | Compare your config against latest template |
+| `/port-from-project` | Port skills/scripts from downstream projects into the template |
 | `/ship` | Commit, PR, merge, and sync local repo |
+| `/capture` | Ship knowledge artifacts (plans, research, decisions) to `.claude/plans/` |
+| `/cleanup` | Pre-exit safety check for worktrees |
+| `/technical-review` | Generate codebase orientation artifacts for backlog tasks |
 | `/version` | Bump version, create and push git tag |
 | `/aws-manifest` | Generate AWS infrastructure manifest |
 
@@ -215,10 +205,13 @@ The template allows these operations without prompting:
 
 | Hook | Trigger | Action |
 |------|---------|--------|
-| `lint-format.sh` | After Edit/Write on `.py` | Runs ruff check --fix and ruff format |
+| `lint-format.sh` | PostToolUse: Edit/Write | Runs ruff check --fix and ruff format |
+| `config-suggest.sh` | PostToolUse: Edit on `.claude/` | Suggests running /sync-config |
+| `worktree-check.sh` | PreToolUse: Bash | Ensures the worktree has a venv before commands run |
+| `no-skip-ci.sh` | PreToolUse: Bash | Blocks commits containing `[skip ci]` |
+| `task-guard.sh` | PreToolUse: Write | Guards `next-steps/` task files from malformed writes |
 | `venv-activate.sh` | Sourced by other hooks | Activates venv (supports venv, poetry, conda, uv, pipenv, pyenv) |
-| `config-suggest.sh` | After Edit on `.claude/` | Suggests running /sync-config |
-| Stop hook | End of response | Suggests /review after implementation work |
+| `worktree-setup.sh` | Invoked by worktree-check | Creates the venv for a fresh worktree |
 
 ### Python Tooling (`pyproject.toml`)
 

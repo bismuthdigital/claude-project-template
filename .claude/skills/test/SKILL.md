@@ -1,6 +1,5 @@
 ---
 name: test
-version: 1.0.0
 description: >
   Runs the test suite with pytest and coverage reporting.
   Use to verify code changes and check test coverage.
@@ -21,7 +20,7 @@ Run pytest with coverage on the specified tests or entire test suite.
 
 **First**, print the version banner:
 ```
-/test v1.0.0
+/test
 ```
 Then run the commands below.
 

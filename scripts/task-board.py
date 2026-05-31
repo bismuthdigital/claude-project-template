@@ -25,7 +25,7 @@ import subprocess
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -1052,7 +1052,7 @@ def _display_your_turn(human_tasks: list[BoardTask]) -> None:
         pad = max(1, TERM_WIDTH - len(left) - len(right) - 2)
         print(f"{left}{' ' * pad}{C.dim(right)}")
         if bt.description:
-            print(f"    {C.dim(bt.description[:TERM_WIDTH - 6])}")
+            print(f"    {C.dim(bt.description[: TERM_WIDTH - 6])}")
     print()
 
 
@@ -1148,7 +1148,7 @@ def to_json(
         )
 
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "summary": summary,
         "tasks": tasks_json,
         "clusters": clusters,

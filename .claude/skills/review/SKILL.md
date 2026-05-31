@@ -1,69 +1,46 @@
 ---
 name: review
-version: 1.0.0
 description: >
-  Reviews code for bugs, oversights, and common Python errors.
-  Use after implementing changes to catch issues before committing.
+  Project-specific review lens that complements the built-in /code-review.
+  Adds resiliency/recovery and virtual-environment-hygiene checks that the
+  built-in review does not cover. Run after /code-review on changed code.
 argument-hint: "[files or 'recent']"
 allowed-tools: Read, Glob, Grep, Bash(git diff *), Bash(git log *)
 ---
 
-# Code Review Instructions
+# Project Review Lens
 
-You are a senior Python code reviewer. Your goal is to find issues and report them clearly - do NOT auto-fix anything.
+Claude Code ships a built-in **`/code-review`** that finds correctness bugs plus
+reuse / simplification / efficiency issues across the diff, with effort levels,
+`--fix`, `--comment` (inline PR comments), and a cloud multi-agent **`ultra`**
+mode for large diffs. **Run that first** for general review — do not
+re-implement generic bug-finding or parallel batching here; `/code-review ultra`
+already fans out across agents in the cloud.
 
-## Review Focus Areas
+This skill adds the two lenses that are **specific to this template** and are
+*not* part of the built-in review. Report findings only — to apply changes use
+`/code-review --fix` (bugs) or `/simplify` (quality).
 
-### 1. Logic Errors
-- Off-by-one errors in loops and slices
-- Missing null/None checks
-- Edge cases not handled (empty lists, zero values, etc.)
-- Incorrect boolean logic or operator precedence
-- Race conditions in async code
+## When to use which
 
-### 2. Python-Specific Issues
-- Mutable default arguments (`def foo(items=[])``)
-- Missing `self` parameter in methods
-- Bare `except:` clauses (should catch specific exceptions)
-- Swallowing exceptions without logging
-- Resource leaks (files, connections without context managers)
-- Incorrect use of `is` vs `==`
-- Modifying collections while iterating
+| Goal | Use |
+|------|-----|
+| Correctness bugs, reuse, efficiency | built-in `/code-review` (add `ultra` for large diffs) |
+| Apply quality cleanups to the diff | built-in `/simplify` |
+| Shell scripts | `/bash-review` |
+| Resiliency + venv-hygiene lenses | **this skill** |
 
-### 3. Type Safety
-- Type annotation accuracy
-- Optional types not handled (missing None checks)
-- Incorrect generic types
-- Any types that should be more specific
+## Scope
 
-### 4. Performance Concerns
-- Unnecessary iterations or repeated work
-- N+1 patterns (database queries in loops)
-- Missing caching for expensive operations
-- Inefficient data structures for the use case
-- String concatenation in loops (use join)
+1. **Identify files**:
+   - If argument is "recent" or empty: `git diff --name-only HEAD`
+   - If specific files given: use those
+   - Consider `.py`, `.sh`, and SKILL.md command blocks (venv-hygiene applies to all three)
+2. **Read each file** before flagging.
 
-### 5. Testing Gaps
-- New code paths without test coverage
-- Edge cases not tested
-- Error cases not tested
-- Mocked dependencies that hide bugs
+## Lens 1 — Resiliency & Recovery
 
-### 6. Documentation
-- Missing docstrings on public functions/classes
-- Outdated docstrings after changes
-- Missing type hints
-- Complex logic without explanatory comments
-
-### 7. Shell Scripts
-For `.sh` files, this skill provides basic checks. For comprehensive shell script analysis, run `/bash-review` which includes:
-- Shellcheck integration (when available)
-- Security vulnerability detection
-- Portability concerns (GNU vs BSD)
-- Bash-specific best practices
-
-### 8. Resiliency & Recovery
-Evaluate how code handles interruptions and partial failures:
+Evaluate how the code handles interruptions and partial failures:
 
 **Disk/filesystem failures:**
 - File writes without atomic patterns (write-to-temp + rename) — partial writes corrupt data on crash
@@ -91,9 +68,10 @@ Evaluate how code handles interruptions and partial failures:
 - Cache files that become stale or corrupted with no invalidation or rebuild mechanism
 - No graceful degradation — single component failure brings down the entire operation
 
-### 9. Virtual Environment Hygiene
+## Lens 2 — Virtual Environment Hygiene
 
-Check for Python invocation patterns that bypass the shared venv wrapper:
+Check for Python invocation patterns that bypass the shared venv wrapper
+(`.claude/hooks/venv-activate.sh`):
 
 **Direct Python invocations without wrapper (WARNING):**
 - `python script.py`, `python3 script.py`, `python -c "..."` in shell scripts or SKILL.md command blocks without first sourcing `venv-activate.sh`
@@ -101,10 +79,8 @@ Check for Python invocation patterns that bypass the shared venv wrapper:
 - Any `Bash(python ...)` in skill definitions that don't first source `venv-activate.sh`
 
 **Hardcoded venv activation patterns (SUGGESTION):**
-- `source .venv/bin/activate` in non-wrapper scripts
-- `source venv/bin/activate` in non-wrapper scripts
-- `. .venv/bin/activate` (dot-source variant)
-- `. venv/bin/activate` (dot-source variant)
+- `source .venv/bin/activate` / `source venv/bin/activate` in non-wrapper scripts
+- `. .venv/bin/activate` / `. venv/bin/activate` (dot-source variants)
 - Any hardcoded venv path in scripts other than `.claude/hooks/venv-activate.sh`
 
 **Exceptions (do NOT flag):**
@@ -113,77 +89,34 @@ Check for Python invocation patterns that bypass the shared venv wrapper:
 - `pyproject.toml` or other configuration files
 - Comments explaining the pattern
 
-For each violation found:
-- **SUGGESTION** severity for hardcoded venv activation patterns
-- **WARNING** severity for direct Python invocations in skills/scripts that should use the wrapper
-- **Fix**: Source `.claude/hooks/venv-activate.sh` instead of hardcoding venv activation, or ensure venv is activated before invoking Python
-
-## Process
-
-1. **Identify files to review**:
-   - If argument is "recent" or empty: run `git diff --name-only HEAD~1` to find changed files
-   - If specific files given: use those
-   - Filter to only `.py` files
-
-2. **Smart batching for large file sets**:
-   - If >20 files to review: Use Task tool to spawn parallel general-purpose agents
-     - Split files into batches of 10-15 files each
-     - Each agent reviews its batch independently
-     - Run agents in parallel for faster completion
-   - If 10-20 files: Review sequentially but provide progress updates
-   - If <10 files: Review normally in current context
-
-3. **Read and analyze each file** (or coordinate agents to do so) looking for issues in the focus areas
-
-4. **Consolidate and report findings** using the format below
-   - If using parallel agents: Merge results from all batches
-   - Deduplicate similar issues across files
-   - Sort by severity (Critical → Warning → Suggestion)
+**Fix:** source `.claude/hooks/venv-activate.sh` instead of hardcoding venv
+activation, or ensure the venv is active before invoking Python.
 
 ## Output Format
 
-### Performance Note (if batched)
 ```
-Reviewed [N] files using [M] parallel agents in [X]s
-Batch 1: 15 files analyzed
-Batch 2: 15 files analyzed
-Batch 3: 12 files analyzed
+### Project Review Lens: [filename]
+
+**[1] WARNING** | `line 42` | venv-hygiene
+- **Issue**: Direct `python` call bypasses venv-activate.sh
+- **Impact**: Runs against system Python; may import wrong packages
+- **Fix**: Source .claude/hooks/venv-activate.sh first
+
+**[2] SUGGESTION** | `line 87` | resiliency
+- **Issue**: File write is not atomic
+- **Impact**: A crash mid-write corrupts the file
+- **Fix**: Write to a temp file and rename
 ```
-
-/review v1.0.0
-
-### Review: [filename]
-
-**[1] CRITICAL** | `line 42`
-- **Issue**: Clear description of the bug or problem
-- **Impact**: What could go wrong if not fixed
-- **Fix**: Conceptual description of the solution (not code)
-
-**[2] WARNING** | `line 87`
-- **Issue**: Description
-- **Impact**: What could go wrong
-- **Fix**: Conceptual solution
-
-**[3] SUGGESTION** | `line 123`
-- **Issue**: Description
-- **Impact**: Minor improvement opportunity
-- **Fix**: Conceptual solution
-
----
 
 ### Summary
 
-| Severity | Count |
-|----------|-------|
-| Critical | X |
-| Warning | Y |
-| Suggestion | Z |
+| Lens | Critical | Warning | Suggestion |
+|------|----------|---------|------------|
+| Resiliency | X | Y | Z |
+| Venv hygiene | X | Y | Z |
 
 **Files reviewed**: list files
-**Test coverage**: Note if tests exist for the changes
-**Recommendation**: APPROVE / NEEDS CHANGES
-
----
+**Reminder**: run built-in `/code-review` for general correctness/efficiency if you haven't.
 
 After presenting findings, tell the user:
-"Say **fix [N]** to implement a specific fix, or **fix all** to address everything."
+"Say **fix [N]** to apply a specific fix, or run `/code-review --fix` / `/simplify` for the general passes."

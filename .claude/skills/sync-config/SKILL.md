@@ -1,6 +1,5 @@
 ---
 name: sync-config
-version: 1.0.0
 description: >
   Compare this project's Claude configuration against the official template.
   Identifies missing features, outdated patterns, and suggests specific updates.
@@ -210,14 +209,14 @@ For each configuration area, identify:
 - Updated skill instructions
 - Deprecated skill patterns
 
-**Skill Versions:**
-- Parse the `version:` field from the YAML frontmatter of each local and template SKILL.md
-- Compare using semantic versioning rules (major.minor.patch)
+**Skill Drift (content-based):**
+- Skills carry no `version:` field — compare the SKILL.md **content** of each local skill against the template (the same approach used for scripts and hooks above).
 - Classify each skill as:
-  - **UP_TO_DATE**: Local version matches template version
-  - **UPDATE_AVAILABLE**: Template version is newer than local
-  - **LOCAL_NEWER**: Local version is newer than template (local customization)
-  - **MISSING_VERSION**: No `version:` field in local SKILL.md frontmatter
+  - **UP_TO_DATE**: Local content matches the template
+  - **UPDATE_AVAILABLE**: Content differs and the template adds/changes instructions — show the diff for human judgment
+  - **LOCAL_CUSTOMIZED**: Content differs in ways that look intentional locally (project-specific references) — preserve, don't overwrite
+  - **TEMPLATE_ONLY**: Skill exists in the template but not locally (a new skill to consider adding)
+  - **LOCAL_ONLY**: Skill exists locally but not in the template (a local custom skill)
 
 **Python Tooling (`pyproject.toml`):**
 - New ruff rules enabled
@@ -229,7 +228,6 @@ For each configuration area, identify:
 Output a structured comparison report:
 
 ```
-/sync-config v1.0.0
 ═══════════════════════════════════════════════════
        CONFIGURATION SYNC REPORT
 ═══════════════════════════════════════════════════
@@ -265,20 +263,16 @@ HOOKS (.claude/hooks/)
 SKILLS (.claude/skills/)
 ───────────────────────────────────────────────────
 
-✓ Present: review (v1.0.0), lint (v1.0.0), test (v1.0.0), check (v1.0.0)
-⚠ New skills available:
-  + init-from-template v1.0.0 - Create projects from template
-  + sync-config v1.0.0 - This skill (meta!)
+✓ Up to date: review, lint, test, check (content matches template)
+⚠ New skills available (in template, not local):
+  + init-from-template - Create projects from template
+  + sync-config - This skill (meta!)
 
-⚠ Updated skills:
-  ~ review/SKILL.md - New review focus areas added
+⚠ Content differs (update available — review the diff first):
+  ~ review/SKILL.md - Template adds new review focus areas
 
-⚠ Version mismatches:
-  ~ review/SKILL.md: local v1.0.0 → template v1.1.0 (update available)
-  ~ lint/SKILL.md: local v1.1.0 → template v1.0.0 (local is newer)
-
-✗ Missing version field:
-  ~ custom-skill/SKILL.md — no version in frontmatter
+⚠ Locally customized (preserve — looks intentional):
+  ~ custom-skill/SKILL.md - References project-specific commands
 
 ───────────────────────────────────────────────────
 PYTHON TOOLING (pyproject.toml)
@@ -297,7 +291,7 @@ SUMMARY
 Total differences: X
   - Permissions: Y new, Z security improvements
   - Hooks: A new
-  - Skills: B new, C updated, D version mismatches
+  - Skills: B new, C content differs, D locally customized
   - Tooling: E new rules
 
 Recommendation: [UP TO DATE / MINOR UPDATES / SIGNIFICANT UPDATES]
@@ -315,7 +309,7 @@ Would you like me to apply any of these updates?
 [3] Update hooks (review changes first)
 [4] Add new skills (copy from template)
 [5] Update pyproject.toml ruff rules (may require fixes)
-[6] Update skill versions (align with template versions)
+[6] Update skills whose content differs from template (review diffs first)
 
 Say "apply [N]" or "apply all" to make changes.
 Say "show [N]" to see the full diff for that section.

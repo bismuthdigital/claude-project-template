@@ -142,7 +142,13 @@
       "Write(.env)",
       "Write(.env.*)",
       "Bash(rm -rf *)",
+      "Bash(rm -rf:*)",
+      "Bash(rm -fr *)",
+      "Bash(rm -fr:*)",
+      "Bash(rm -r -f *)",
+      "Bash(rm -f -r *)",
       "Bash(sudo *)",
+      "Bash(sudo:*)",
       "Bash(curl * | *)",
       "Bash(wget * | *)"
     ]

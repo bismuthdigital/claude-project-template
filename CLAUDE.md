@@ -2,7 +2,7 @@
 
 ## Overview
 
-A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 28 custom skills — so you can start building immediately with sensible defaults.
+A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 27 custom skills — so you can start building immediately with sensible defaults.
 
 ## Architecture
 
@@ -45,7 +45,7 @@ next-steps/                # Per-task file storage
 ├── ship.json              # Ship workflow settings
 ├── plans/                 # Knowledge artifacts from /capture
 ├── hooks/                 # Auto-linting, venv activation, worktree isolation, task guard
-└── skills/                # 28 skill definitions
+└── skills/                # 27 skill definitions
 
 install.sh                 # Template installer
 ```
@@ -123,8 +123,8 @@ The project has two shipping lanes: **code** (via `/ship`) and **knowledge** (vi
 | Docs | `docs/` | Operational docs, research methodology | Manual |
 
 **Workflow for planning conversations:**
-1. Discuss, iterate, decide
-2. `/capture` — synthesize findings into `.claude/plans/<slug>.md`
+1. Discuss, iterate, decide — use **plan mode** (`EnterPlanMode`) for design-heavy work; it holds the approved plan only for the current session
+2. `/capture` — persist the plan/findings into `.claude/plans/<slug>.md` so they survive the session
 3. Create tasks that reference the plan: `--body "Context: see .claude/plans/<slug>.md"`
 4. `/ship` — commit and merge (if there are code changes)
 5. `/cleanup` — verify nothing is lost before exiting
@@ -141,7 +141,7 @@ This project includes Claude Code skills for development:
 |-------|---------|
 | `/lint` | Run linters and formatters |
 | `/test` | Run tests with coverage |
-| `/review` | Code review for issues |
+| `/review` | Project-specific review lens (resiliency + venv hygiene) on top of built-in `/code-review` |
 | `/bash-review` | Review bash scripts for issues |
 | `/docs` | Review documentation and comments |
 | `/check` | Full validation pipeline |
@@ -157,7 +157,6 @@ This project includes Claude Code skills for development:
 | `/claim-tasks` | Claim tasks from backlog with 4-phase merge-queue execution |
 | `/sprint` | Thin wrapper over claim-tasks with resume detection |
 | `/release-tasks` | Release claimed tasks back to the work queue |
-| `/code-health` | Active code review — read, diagnose, and fix quality issues |
 | `/worktree-cleanup` | Clean up stale worktrees and reclaim disk space |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
@@ -167,3 +166,24 @@ This project includes Claude Code skills for development:
 | `/ci-review` | Diagnose GitHub Actions CI failures and suggest fixes |
 | `/fix-failed-pr` | Batch-fix broken PRs with combine mode |
 | `/aws-manifest` | Generate AWS infrastructure manifest |
+
+## Built-in Claude Code Capabilities
+
+Current Claude Code ships built-in skills and orchestration primitives. **Prefer these over reinventing them** — the custom skills above exist only where they add project-specific value on top of a built-in.
+
+**Built-in skills (use directly):**
+
+| Built-in | Use it for | Relation to custom skills |
+|----------|-----------|---------------------------|
+| `/code-review` | Correctness bugs + reuse/efficiency across the diff; effort levels, `--fix`, `--comment` (inline PR comments), cloud multi-agent `ultra` mode | The custom `/review` adds only the resiliency + venv-hygiene lenses on top of this |
+| `/simplify` | Quality-only cleanup of the changed diff, then applies fixes | Replaces the removed `/code-health` |
+| `/verify`, `/run` | Launch the app to confirm a change actually works | Complements `/test` (pytest); different axis |
+| `/security-review` | Security review of pending changes | No custom equivalent |
+| `/deep-research` | Multi-source, fact-checked research reports | — |
+| `/schedule`, `/loop` | Recurring / scheduled agents | Good fit for automating CI-repair (`/fix-failed-pr`, `/ci-review`) and task-board upkeep |
+
+**Orchestration & planning primitives:**
+
+- **Agent tool** (`subagent_type`: `Explore`, `general-purpose`, `Plan`, …) — spawn subagents for fan-out search or parallel work. This is the modern replacement for older "Task tool" phrasing.
+- **Workflow tool** — deterministic multi-agent orchestration (`pipeline`/`parallel`/`agent`, worktree isolation, structured output, resume). Use for genuinely parallel fan-out; requires explicit user opt-in. Note: `/claim-tasks` is a *sequential* merge queue **by design** and stays sequential — the parallelizable fits are `/fix-failed-pr`'s combine step and `/docs` batching.
+- **Plan mode** (`EnterPlanMode`/`ExitPlanMode`) — design before editing; persist an approved plan to the repo with `/capture`.
