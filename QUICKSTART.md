@@ -1,7 +1,7 @@
 ## What
 
 Reusable Claude Code configuration template for Python projects. Provides
-permissions, auto-linting hooks, code review workflows, and 28 custom skills.
+permissions, auto-linting hooks, code review workflows, and 27 custom skills.
 
 ## Setup
 
@@ -25,7 +25,7 @@ scripts/work-queue.sh       Task claiming for concurrent agents
 scripts/sync-all-projects.sh  Sync config across all repos
 .claude/settings.json       Permissions and hooks config
 .claude/hooks/              Auto-linting, venv activation, config suggestions
-.claude/skills/             All skill definitions (24 skills)
+.claude/skills/             All skill definitions (27 skills)
 .claude/ship.json           Ship workflow settings
 ```
 

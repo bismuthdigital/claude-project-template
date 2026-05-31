@@ -1,6 +1,5 @@
 ---
 name: cleanup
-version: 1.0.0
 description: >
   Pre-exit safety check for worktrees. Detects unshipped work, uncommitted changes,
   uncaptured knowledge artifacts, and active claims before you exit and remove a worktree.

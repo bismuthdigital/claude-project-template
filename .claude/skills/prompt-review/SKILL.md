@@ -1,6 +1,5 @@
 ---
 name: prompt-review
-version: 1.0.0
 description: >
   Reviews all AI prompts in the application source code and suggests
   improvements for accuracy, quality, and cost-efficiency. Excludes
@@ -286,7 +285,7 @@ Apply the 6-dimension framework. For each prompt produce:
 ──────────────────────────────────────
 PROMPT: src/classifier.py:42
 Type: system prompt (static)
-Model: claude-sonnet-4
+Model: claude-sonnet-4-6
 Tokens: ~340
 ──────────────────────────────────────
 
@@ -380,7 +379,7 @@ After reviewing all prompts individually, identify patterns across the codebase:
 ## Output Format
 
 ```
-/prompt-review v1.0.0
+/prompt-review
 ═══════════════════════════════════════════════════
           PROMPT REVIEW REPORT
 ═══════════════════════════════════════════════════

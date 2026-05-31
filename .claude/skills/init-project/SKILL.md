@@ -1,6 +1,5 @@
 ---
 name: init-project
-version: 1.0.0
 description: >
   Initialize a new Python project from claude-project-template and create a private GitHub repository.
   Complete setup: clone template, customize, git init, create GitHub repo, and push.
@@ -62,7 +61,7 @@ fi
 Verify GitHub CLI is authenticated:
 
 ```bash
-echo "/init-project v1.0.0"
+echo "/init-project"
 echo "═══════════════════════════════════════════════════"
 echo "          INITIALIZING PROJECT: $PROJECT_NAME"
 echo "═══════════════════════════════════════════════════"

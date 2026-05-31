@@ -154,7 +154,11 @@ mypy src/
 pytest --tb=short -q
 ```
 
-### 5f: Code health review (subagent)
+### 5f: Quality review
+
+Run the built-in `/simplify` on the merged result to clean up any
+reuse/efficiency issues introduced by combining branches (this replaces the
+retired `/code-health` skill — `/simplify` is the built-in equivalent).
 
 ### 5g: Create combined PR
 ```bash

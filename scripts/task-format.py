@@ -35,7 +35,7 @@ import re
 import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 # --- Data structures ---
@@ -632,7 +632,7 @@ def generate_index(filepath: Path) -> dict:
         "next_id": existing_next_id,
         "generated_from": str(filepath.name),
         "generated_from_sha": file_sha,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "task_count": len(tasks),
         "pending_count": sum(1 for t in tasks if t.state == "pending"),
         "completed_count": sum(1 for t in tasks if t.state == "completed"),
@@ -1049,7 +1049,7 @@ def _load_task_files() -> list[TaskEntry]:
     return entries
 
 
-def _write_task_file(  # noqa: PLR0912
+def _write_task_file(  # noqa: PLR0912, PLR0915
     task: TaskEntry,
     dest_dir: Path,
     *,
@@ -1089,7 +1089,7 @@ def _write_task_file(  # noqa: PLR0912
     if created:
         fm_lines.append(f"created: {created}")
     else:
-        fm_lines.append(f"created: {datetime.now(timezone.utc).strftime('%Y-%m-%d')}")
+        fm_lines.append(f"created: {datetime.now(UTC).strftime('%Y-%m-%d')}")
     fm_lines.append("---")
 
     # Build body
@@ -1794,7 +1794,7 @@ def complete_task_file(
     body = _extract_task_body(content)
 
     if not completed_date:
-        completed_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        completed_date = datetime.now(UTC).strftime("%Y-%m-%d")
 
     # Rebuild frontmatter with completion data
     fm["status"] = "completed"

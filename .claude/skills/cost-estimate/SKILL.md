@@ -1,6 +1,5 @@
 ---
 name: cost-estimate
-version: 1.0.0
 description: >
   Estimates Anthropic API costs for operations in this repo.
   Analyzes execution paths, model usage, and suggests optimizations
@@ -17,15 +16,17 @@ Analyze this repository for Anthropic API cost drivers and provide actionable es
 
 Use these rates for all calculations:
 
-| Model | Input | Output | Prompt Cache Write | Prompt Cache Read |
+<!-- Verified against https://docs.anthropic.com/en/docs/about-claude/pricing on 2026-05-30. Confirm live pricing before relying on these figures, as rates change. -->
+
+| Model | Input | Output | Prompt Cache Write (5m) | Prompt Cache Read |
 |-------|-------|--------|--------------------|-------------------|
-| Claude Opus 4 | $15.00 | $75.00 | $18.75 | $1.50 |
-| Claude Sonnet 4 | $3.00 | $15.00 | $3.75 | $0.30 |
-| Claude Haiku 3.5 | $0.80 | $4.00 | $1.00 | $0.08 |
+| Claude Opus 4.8 | $5.00 | $25.00 | $6.25 | $0.50 |
+| Claude Sonnet 4.6 | $3.00 | $15.00 | $3.75 | $0.30 |
+| Claude Haiku 4.5 | $1.00 | $5.00 | $1.25 | $0.10 |
 
 **Extended thinking surcharges** (if applicable):
-- Opus 4 extended thinking: $15.00 input / $75.00 output (same rate)
-- Sonnet 4 extended thinking: $3.00 input / $15.00 output (same rate)
+- Opus 4.8 extended thinking: $5.00 input / $25.00 output (same rate)
+- Sonnet 4.6 extended thinking: $3.00 input / $15.00 output (same rate)
 
 **Batch API discount**: 50% off all models (if applicable)
 
@@ -98,7 +99,7 @@ For each API call site found:
 Report format for each call site:
 
 ```
-[FILE:LINE] model=claude-sonnet-4-20250514 confidence=HIGH
+[FILE:LINE] model=claude-sonnet-4-6 confidence=HIGH
   Input:  ~2,400 tokens (system: 800, user: 1,200, context: 400)
   Output: ~500 tokens (max_tokens=1024, typical ~500)
   Cost per call: $0.0147
@@ -171,7 +172,7 @@ These are costs inherent to using Claude Code interactively:
 3. **File reads injected into context**: Each `Read` tool result adds file content as tokens
    - Large files (>500 lines) add 5,000-15,000+ tokens per read
 
-4. **Agent/Task spawning**: Each `Task` tool call creates a sub-agent with its own context
+4. **Subagent spawning**: Each `Agent` tool call (or a Workflow `agent()`) creates a sub-agent with its own context
    - Sub-agents inherit system prompt overhead
    - Parallel agents multiply costs
 
@@ -263,13 +264,13 @@ Suggest restructuring units of work to reduce total API costs:
 ## Output Format
 
 ```
-/cost-estimate v1.0.0
+/cost-estimate
 ═══════════════════════════════════════════════════
             COST ESTIMATION REPORT
 ═══════════════════════════════════════════════════
 Project: [project name from pyproject.toml]
 Analysis scope: [full / skills / hooks / path]
-Model rates as of: 2025 (verify at anthropic.com/pricing)
+Model rates as of: 2026-05-30 (verify at anthropic.com/pricing)
 
 ───────────────────────────────────────────────────
 1. DIRECT API USAGE

@@ -1,6 +1,5 @@
 ---
 name: version
-version: 1.0.0
 description: >
   Manages semantic versioning. Analyzes changes to determine appropriate
   increment level (major/minor/patch) or accepts manual override.
@@ -170,7 +169,7 @@ git push origin HEAD
 ## Output Format
 
 ```
-/version v1.0.0
+/version
 ═══════════════════════════════════════════════════
               VERSION MANAGEMENT
 ═══════════════════════════════════════════════════

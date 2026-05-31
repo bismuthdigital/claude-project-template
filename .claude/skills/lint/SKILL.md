@@ -1,6 +1,5 @@
 ---
 name: lint
-version: 1.0.0
 description: >
   Runs Python linters and formatters (ruff, black, mypy) on the codebase.
   Use to check and fix code style issues.
@@ -28,7 +27,7 @@ Run all Python quality tools on the specified path or entire project.
 
 **First**, print the version banner:
 ```
-/lint v1.0.0
+/lint
 ```
 Then run the commands below.
 

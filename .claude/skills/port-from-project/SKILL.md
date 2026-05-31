@@ -1,6 +1,5 @@
 ---
 name: port-from-project
-version: 1.0.0
 description: >
   Port skills, scripts, hooks, and configuration from a downstream project back
   into this template. Compares the source project against the template, identifies
@@ -78,9 +77,8 @@ For each skill in the source, classify it:
 | Classification | Condition | Action |
 |---------------|-----------|--------|
 | **NEW** | Skill directory doesn't exist in template | Candidate for porting |
-| **UPDATED** | Skill exists in both; source version > template version | Candidate for update |
-| **SAME** | Skill exists in both; versions match | Skip |
-| **LOCAL_NEWER** | Skill exists in both; template version > source version | Skip (template is ahead) |
+| **UPDATED** | Skill exists in both; source SKILL.md content differs from template | Candidate — show the diff for human judgment on direction |
+| **SAME** | Skill exists in both; content identical | Skip |
 | **PROJECT_SPECIFIC** | Skill references project-specific domains, data, or concepts | Flag for review |
 
 To detect project-specific skills, check for these signals in the SKILL.md:
@@ -126,19 +124,19 @@ Source: <source-path>
 SKILLS
 -----------------------------------------------
   NEW (portable):
-    + cleanup v1.0.0 — Pre-exit safety check for worktrees
-    + capture v1.0.0 — Knowledge shipping lane
+    + cleanup — Pre-exit safety check for worktrees
+    + capture — Knowledge shipping lane
 
   UPDATED:
-    ~ review v1.1.0 — Source has newer version (template: v1.0.0)
+    ~ review — Source content differs from template (review the diff)
 
   PROJECT-SPECIFIC (needs generalization):
-    ? counsel v1.0.0 — References domain-specific advisory modes
-    ? seed-review v1.0.0 — References project-specific data catalog
+    ? counsel — References domain-specific advisory modes
+    ? seed-review — References project-specific data catalog
 
-  SKIPPED (template is same or newer):
-    = lint v1.0.0
-    = test v1.0.0
+  SKIPPED (content identical):
+    = lint
+    = test
 
 -----------------------------------------------
 SCRIPTS
@@ -225,8 +223,8 @@ After porting, update these files to reflect new capabilities:
   Source: <project-name> (<path>)
 
   Ported:
-    + skill: cleanup v1.0.0 (new)
-    + skill: capture v1.0.0 (new)
+    + skill: cleanup (new)
+    + skill: capture (new)
     ~ script: sync-main.sh (updated)
 
   Generalizations applied:
@@ -270,7 +268,7 @@ When `--skill`, `--script`, or `--hook` filters are provided:
 
 1. **Never overwrite template customizations blindly.** If a skill exists in both, show a diff and ask before replacing.
 2. **Always check for project-specific references.** A skill that works in trans-disco may reference `/counsel` or `data/voices/` — these must be removed or generalized.
-3. **Preserve version ordering.** If the template has v1.1.0 and the source has v1.0.0, don't downgrade.
+3. **Preserve intentional template customizations.** Review the diff before overwriting — don't blindly replace template-specific changes with the source's copy.
 4. **Don't port domain-specific skills.** Skills like `/counsel`, `/seed-review`, `/examine-bias` solve project-specific problems. Only port skills that are genuinely reusable across projects.
 5. **Update docs after porting.** New skills must appear in CLAUDE.md's skills table and the overview skill count.
 
@@ -281,4 +279,4 @@ When `--skill`, `--script`, or `--hook` filters are provided:
 | `/sync-config` | Reverse direction — pushes template changes down to projects |
 | `/ship` | Ship the ported changes after review |
 | `/review` | Review ported code for quality before committing |
-| `/code-health` | Check ported code for anti-patterns |
+| `/simplify` | Check ported code for anti-patterns (built-in) |

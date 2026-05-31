@@ -1,6 +1,5 @@
 ---
 name: model-alternatives
-version: 1.0.0
 description: >
   Finds paid AI API calls in the codebase and recommends free open-source
   replacements. Generates a project-specific eval suite to grade free models
@@ -147,7 +146,7 @@ For each API call, classify into one of these categories by analyzing the surrou
 For each discovered call, recommend 2-3 open-source alternatives ranked by fit:
 
 ```
-[FILE:LINE] provider=anthropic model=claude-sonnet-4-20250514
+[FILE:LINE] provider=anthropic model=claude-sonnet-4-6
   Task type: classification
   Current cost: ~$0.012/call
 
@@ -259,7 +258,7 @@ from pathlib import Path
 
 PAID_MODELS = {
     # Populated from discovered API calls
-    "anthropic/claude-sonnet-4-20250514": {
+    "anthropic/claude-sonnet-4-6": {
         "provider": "anthropic",
         "cost_per_1k_input": 0.003,
         "cost_per_1k_output": 0.015,
@@ -357,7 +356,7 @@ def call_model(model_config: dict, system_prompt: str, user_prompt: str,
         import anthropic
         client = anthropic.Anthropic()
         resp = client.messages.create(
-            model=model_config.get("model_id", "claude-sonnet-4-20250514"),
+            model=model_config.get("model_id", "claude-sonnet-4-6"),
             max_tokens=max_tokens,
             system=system_prompt,
             messages=[{"role": "user", "content": user_prompt}],
@@ -710,7 +709,7 @@ PERSISTENCE: src/classifier.py:42
 ## Output Format
 
 ```
-/model-alternatives v1.0.0
+/model-alternatives
 ═══════════════════════════════════════════════════
       MODEL ALTERNATIVES REPORT
 ═══════════════════════════════════════════════════

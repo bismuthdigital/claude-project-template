@@ -1,6 +1,5 @@
 ---
 name: capture
-version: 1.0.0
 description: >
   Capture planning artifacts, research findings, and decision context from the
   current conversation into discoverable plan files. Ships knowledge the way
@@ -35,6 +34,7 @@ Plan files in `.claude/plans/` solve this: they're in the repo, discoverable by 
 ## When to Use
 
 - After a planning conversation that produced decisions or research worth preserving
+- **After exiting plan mode** (`ExitPlanMode`) on a plan worth keeping — plan mode holds the approved plan only for the current session; `/capture` persists it to the repo so future agents can discover it
 - When the user says "save this", "capture this", "remember this plan"
 - Before `/ship` if the conversation involved significant planning beyond just implementation
 - When `/cleanup` flags `UNCAPTURED KNOWLEDGE`
@@ -212,8 +212,9 @@ When a conversation revisits a topic that already has a plan file:
 
 ## Integration with Other Skills
 
-| Skill | Integration |
-|-------|-------------|
+| Skill / feature | Integration |
+|-----------------|-------------|
+| Plan mode | Plan mode (`EnterPlanMode`/`ExitPlanMode`) holds an approved plan in-session only; `/capture` persists it to `.claude/plans/` for future agents and reviewers |
 | `/cleanup` | Detects uncaptured knowledge and suggests `/capture` |
 | `/ship` | Ships code; `/capture` ships the reasoning behind it |
 | `/claim-tasks` | Implementation agents read plan files linked from tasks |
