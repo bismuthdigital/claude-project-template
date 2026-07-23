@@ -12,23 +12,21 @@ allowed-tools: Read, Glob, Grep, Bash(git diff *), Bash(git log *), Bash(wc *), 
 
 Analyze this repository for Anthropic API cost drivers and provide actionable estimates with confidence levels.
 
-## Pricing Reference (USD per million tokens)
+## Pricing Reference
 
-Use these rates for all calculations:
+Do NOT rely on remembered pricing — model prices and lineups change.
+Before calculating, load current per-model pricing from an authoritative
+source, in this order:
 
-<!-- Verified against https://docs.anthropic.com/en/docs/about-claude/pricing on 2026-05-30. Confirm live pricing before relying on these figures, as rates change. -->
+1. The `claude-api` skill (carries current model IDs and per-million-token
+   pricing, including prompt-cache write/read rates).
+2. https://docs.claude.com/en/docs/about-claude/pricing (WebFetch if the
+   skill is unavailable).
 
-| Model | Input | Output | Prompt Cache Write (5m) | Prompt Cache Read |
-|-------|-------|--------|--------------------|-------------------|
-| Claude Opus 4.8 | $5.00 | $25.00 | $6.25 | $0.50 |
-| Claude Sonnet 4.6 | $3.00 | $15.00 | $3.75 | $0.30 |
-| Claude Haiku 4.5 | $1.00 | $5.00 | $1.25 | $0.10 |
-
-**Extended thinking surcharges** (if applicable):
-- Opus 4.8 extended thinking: $5.00 input / $25.00 output (same rate)
-- Sonnet 4.6 extended thinking: $3.00 input / $15.00 output (same rate)
-
-**Batch API discount**: 50% off all models (if applicable)
+Build your own pricing table from that source and cite it in the report.
+Include prompt-cache write/read rates. Extended thinking bills at the
+same per-token rates; the Batch API is 50% off (apply only where the
+code actually uses it).
 
 ## Token Estimation Heuristics
 
@@ -99,7 +97,7 @@ For each API call site found:
 Report format for each call site:
 
 ```
-[FILE:LINE] model=claude-sonnet-4-6 confidence=HIGH
+[FILE:LINE] model=claude-sonnet-5 confidence=HIGH
   Input:  ~2,400 tokens (system: 800, user: 1,200, context: 400)
   Output: ~500 tokens (max_tokens=1024, typical ~500)
   Cost per call: $0.0147
@@ -112,7 +110,7 @@ Report format for each call site:
 For each skill defined in `.claude/skills/`:
 
 1. **Read the SKILL.md file** and count its tokens (this becomes part of the prompt)
-2. **Check `disable-model-invocation`**: If true, the skill runs without an API call — cost is $0
+2. **Check `disable-model-invocation`**: If true, the skill never auto-loads on model initiative — its description costs nothing beyond the session skill list, but a user-invoked run costs the same as any other skill
 3. **Identify sub-skill calls**: Skills like `/check` invoke other skills — sum their costs
 4. **Estimate tool call rounds**: Each tool call in a skill = 1 API round-trip
    - Simple skills (lint, test): 2-5 rounds typically
@@ -186,7 +184,7 @@ Estimate costs for common developer workflows in this project:
 | Feature development | Multi-file changes, review, test | ~$X.XX |
 | Full validation (`/check`) | Lint + test + review + docs | ~$X.XX |
 | Ship (`/ship`) | Commit + PR + merge | ~$X.XX |
-| Code review (`/review`) | Review recent changes | ~$X.XX |
+| Code review (`/code-review`) | Review the working diff | ~$X.XX |
 | Cost estimate (`/cost-estimate`) | This skill | ~$X.XX |
 
 ## Optimization Recommendations
@@ -270,7 +268,7 @@ Suggest restructuring units of work to reduce total API costs:
 ═══════════════════════════════════════════════════
 Project: [project name from pyproject.toml]
 Analysis scope: [full / skills / hooks / path]
-Model rates as of: 2026-05-30 (verify at anthropic.com/pricing)
+Model rates as of: [date + source loaded per Pricing Reference]
 
 ───────────────────────────────────────────────────
 1. DIRECT API USAGE
@@ -333,7 +331,7 @@ Assumptions:
   • Sessions per day: [N]
   • Average exchanges per session: [N]
   • Primary model: [model]
-  • Prices from: anthropic.com/pricing (verify current rates)
+  • Prices from: [source loaded per Pricing Reference]
 ═══════════════════════════════════════════════════
 
 NOTE: These estimates carry the confidence levels stated
@@ -344,7 +342,7 @@ Anthropic dashboard for actual spend.
 
 ## Important Notes
 
-- Always remind the user to verify current pricing at anthropic.com/pricing
+- Always cite the pricing source and date used (see Pricing Reference above)
 - Token counts are estimates — actual tokenization varies by content
 - Session costs vary significantly based on conversation length and complexity
 - Caching effectiveness depends on prompt stability between calls

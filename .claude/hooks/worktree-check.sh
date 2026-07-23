@@ -11,7 +11,15 @@
 #   - Commands with venv activation: allow (activation uses local .venv)
 #   - Bare pytest/python/pip: block and suggest .venv/bin/ prefix
 #
-# The local .venv is auto-created on first Python command via worktree-setup.sh.
+# Blocking uses exit 2 with the reason on stderr — the only combination
+# Claude Code feeds back to the model (exit 1 does not block; stdout is
+# not returned).
+#
+# The local .venv is auto-created on first Python command via
+# worktree-setup.sh, which is the single implementation of
+# create/verify/fix. A stamp file newer than site-packages skips the
+# Python-spawn verification on the hot path; any pip activity updates
+# site-packages' mtime and invalidates the stamp.
 
 set -e
 
@@ -27,48 +35,20 @@ fi
 
 LOCAL_VENV="$CLAUDE_PROJECT_DIR/.venv"
 SETUP_SCRIPT="$CLAUDE_PROJECT_DIR/.claude/hooks/worktree-setup.sh"
+STAMP="$LOCAL_VENV/.install-verified"
 
-# Helper: ensure local venv exists (creates on first call)
+# Helper: ensure local venv exists with a correct editable install.
 ensure_venv() {
-    if [[ ! -f "$LOCAL_VENV/bin/python" ]]; then
-        bash "$SETUP_SCRIPT" "$CLAUDE_PROJECT_DIR"
+    local site_pkgs
+    site_pkgs=("$LOCAL_VENV"/lib/python*/site-packages)
+    if [[ -f "$STAMP" && -d "${site_pkgs[0]}" && "$STAMP" -nt "${site_pkgs[0]}" ]]; then
+        return 0
     fi
-}
-
-# Helper: detect the project's package name from pyproject.toml
-get_package_name() {
-    "$LOCAL_VENV/bin/python" -c "
-try:
-    import tomllib
-except ImportError:
-    import tomli as tomllib
-with open('$CLAUDE_PROJECT_DIR/pyproject.toml', 'rb') as f:
-    data = tomllib.load(f)
-name = data.get('project', {}).get('name', '')
-print(name.replace('-', '_'))
-" 2>/dev/null || echo ""
-}
-
-# Helper: verify editable install points to this worktree, fix if not
-verify_install() {
-    local pkg_name
-    pkg_name=$(get_package_name)
-    [[ -z "$pkg_name" ]] && return 0
-
-    local install_loc
-    install_loc=$("$LOCAL_VENV/bin/python" -c "
-import ${pkg_name}, os
-print(os.path.dirname(os.path.dirname(${pkg_name}.__file__)))
-" 2>/dev/null || true)
-    if [[ -n "$install_loc" ]]; then
-        local real_project real_install
-        real_project=$(cd "$CLAUDE_PROJECT_DIR" && pwd -P)
-        real_install=$(cd "$install_loc" 2>/dev/null && pwd -P || echo "")
-        if [[ "$real_install" != "$real_project"* ]]; then
-            echo "Fixing editable install (was: $real_install)..."
-            "$LOCAL_VENV/bin/pip" install -e "$CLAUDE_PROJECT_DIR[dev]" --quiet 2>&1
-        fi
+    if ! bash "$SETUP_SCRIPT" "$CLAUDE_PROJECT_DIR"; then
+        echo "WORKTREE: local .venv setup failed — fix the venv (bash .claude/hooks/worktree-setup.sh) before running Python commands." >&2
+        exit 2
     fi
+    touch "$STAMP"
 }
 
 # ── Route by command pattern ──────────────────────────────────────────
@@ -77,7 +57,6 @@ case "$COMMAND" in
     # ── Commands explicitly using local .venv — verify and proceed ────
     .venv/bin/*)
         ensure_venv
-        verify_install
         exit 0
         ;;
 
@@ -90,11 +69,11 @@ case "$COMMAND" in
     # ── Bare Python commands — block with suggestion ──────────────────
     pytest\ *|pytest)
         ensure_venv
-        echo ""
-        echo "WORKTREE: Use '.venv/bin/pytest${COMMAND#pytest}' instead of bare 'pytest'."
-        echo "Each worktree has its own .venv for isolation from concurrent agents."
-        echo ""
-        exit 1
+        {
+            echo "WORKTREE: Use '.venv/bin/pytest${COMMAND#pytest}' instead of bare 'pytest'."
+            echo "Each worktree has its own .venv for isolation from concurrent agents."
+        } >&2
+        exit 2
         ;;
 
     python\ *|python3\ *)
@@ -102,32 +81,32 @@ case "$COMMAND" in
         local_bin=".venv/bin/python"
         bare_cmd="${COMMAND%%\ *}"
         args="${COMMAND#"$bare_cmd"}"
-        echo ""
-        echo "WORKTREE: Use '${local_bin}${args}' instead of bare '${bare_cmd}'."
-        echo "Each worktree has its own .venv for isolation from concurrent agents."
-        echo ""
-        exit 1
+        {
+            echo "WORKTREE: Use '${local_bin}${args}' instead of bare '${bare_cmd}'."
+            echo "Each worktree has its own .venv for isolation from concurrent agents."
+        } >&2
+        exit 2
         ;;
 
     pip\ install*|pip3\ install*)
         ensure_venv
         bare_cmd="${COMMAND%%\ *}"
         args="${COMMAND#"$bare_cmd"}"
-        echo ""
-        echo "WORKTREE: Use '.venv/bin/pip${args}' instead of bare '${bare_cmd}'."
-        echo "Each worktree has its own .venv for isolation from concurrent agents."
-        echo ""
-        exit 1
+        {
+            echo "WORKTREE: Use '.venv/bin/pip${args}' instead of bare '${bare_cmd}'."
+            echo "Each worktree has its own .venv for isolation from concurrent agents."
+        } >&2
+        exit 2
         ;;
 
     # ── Compound commands with bare python ─────────────────────────────
     *python\ -m\ pytest*|*python3\ -m\ pytest*|*python\ -c\ *|*python3\ -c\ *)
         ensure_venv
-        echo ""
-        echo "WORKTREE: Use '.venv/bin/python' instead of bare 'python' in compound commands."
-        echo "Example: echo \"\$AFFECTED\" | xargs .venv/bin/python -m pytest ..."
-        echo ""
-        exit 1
+        {
+            echo "WORKTREE: Use '.venv/bin/python' instead of bare 'python' in compound commands."
+            echo "Example: echo \"\$AFFECTED\" | xargs .venv/bin/python -m pytest ..."
+        } >&2
+        exit 2
         ;;
 
     # ── Everything else — pass through ────────────────────────────────

@@ -1,5 +1,5 @@
 ---
-name: review
+name: project-review
 description: >
   Project-specific review lens that complements the built-in /code-review.
   Adds resiliency/recovery and virtual-environment-hygiene checks that the

@@ -2,7 +2,7 @@
 
 ## Overview
 
-A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 27 custom skills — so you can start building immediately with sensible defaults.
+A reusable Claude Code configuration template for Python projects. Provides pre-configured permissions, automated linting hooks, code review workflows, and 26 custom skills — so you can start building immediately with sensible defaults.
 
 ## Architecture
 
@@ -45,7 +45,7 @@ next-steps/                # Per-task file storage
 ├── ship.json              # Ship workflow settings
 ├── plans/                 # Knowledge artifacts from /capture
 ├── hooks/                 # Auto-linting, venv activation, worktree isolation, task guard
-└── skills/                # 27 skill definitions
+└── skills/                # 26 skill definitions
 
 install.sh                 # Template installer
 ```
@@ -141,7 +141,7 @@ This project includes Claude Code skills for development:
 |-------|---------|
 | `/lint` | Run linters and formatters |
 | `/test` | Run tests with coverage |
-| `/review` | Project-specific review lens (resiliency + venv hygiene) on top of built-in `/code-review` |
+| `/project-review` | Project-specific review lens (resiliency + venv hygiene) on top of built-in `/code-review` |
 | `/bash-review` | Review bash scripts for issues |
 | `/docs` | Review documentation and comments |
 | `/check` | Full validation pipeline |
@@ -149,7 +149,6 @@ This project includes Claude Code skills for development:
 | `/init-project` | Create new project with GitHub repository |
 | `/sync-config` | Compare config against template |
 | `/port-from-project` | Port skills/scripts from downstream projects into template |
-| `/comic` | Generate SVG explainer comics about the project |
 | `/ship` | Commit, PR, merge, and sync local repo |
 | `/capture` | Ship knowledge artifacts to `.claude/plans/` |
 | `/cleanup` | Pre-exit safety check for worktrees |
@@ -175,7 +174,7 @@ Current Claude Code ships built-in skills and orchestration primitives. **Prefer
 
 | Built-in | Use it for | Relation to custom skills |
 |----------|-----------|---------------------------|
-| `/code-review` | Correctness bugs + reuse/efficiency across the diff; effort levels, `--fix`, `--comment` (inline PR comments), cloud multi-agent `ultra` mode | The custom `/review` adds only the resiliency + venv-hygiene lenses on top of this |
+| `/code-review` | Correctness bugs + reuse/efficiency across the diff; effort levels, `--fix`, `--comment` (inline PR comments), cloud multi-agent `ultra` mode | The custom `/project-review` adds only the resiliency + venv-hygiene lenses on top of this |
 | `/simplify` | Quality-only cleanup of the changed diff, then applies fixes | Replaces the removed `/code-health` |
 | `/verify`, `/run` | Launch the app to confirm a change actually works | Complements `/test` (pytest); different axis |
 | `/security-review` | Security review of pending changes | No custom equivalent |

@@ -5,7 +5,7 @@ description: >
   Complete setup: clone template, customize, git init, create GitHub repo, and push.
 argument-hint: "<project-name> [target-directory]"
 disable-model-invocation: true
-allowed-tools: Bash(git *), Bash(gh *), Bash(mkdir *), Bash(mv *), Bash(rm -rf *), Read, Edit, Write, Glob
+allowed-tools: Bash(git *), Bash(gh *), Bash(mkdir *), Bash(mv *), Bash(chmod -R u+w *), Bash(rm -r *), Read, Edit, Write, Glob
 ---
 
 # Initialize Project with GitHub Repository
@@ -108,7 +108,7 @@ fi
 echo "✓ Cloned claude-project-template"
 
 cd "$TARGET_DIR" || exit 1
-rm -rf .git
+chmod -R u+w .git && rm -r .git
 echo "✓ Removed template git history"
 ```
 
@@ -245,7 +245,7 @@ echo ""
 echo "Available skills:"
 echo "  /lint    - Run linters and formatters"
 echo "  /test    - Run tests with coverage"
-echo "  /review  - Code review for issues"
+echo "  /project-review  - Resiliency + venv-hygiene review lens"
 echo "  /check   - Full validation pipeline"
 echo "  /ship    - Commit, PR, merge, and sync workflow"
 echo ""

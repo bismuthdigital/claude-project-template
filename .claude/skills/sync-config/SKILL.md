@@ -4,7 +4,7 @@ description: >
   Compare this project's Claude configuration against the official template.
   Identifies missing features, outdated patterns, and suggests specific updates.
 argument-hint: "[--detailed]"
-allowed-tools: Read, Glob, Grep, Bash(git *), Bash(curl *), Bash(mktemp *), Bash(rm -rf *), Bash(gh *), Bash(cat *), Bash(source *)
+allowed-tools: Read, Glob, Grep, Bash(git *), Bash(curl *), Bash(mktemp *), Bash(chmod -R u+w *), Bash(rm -r *), Bash(gh *), Bash(cat *), Bash(source *)
 ---
 
 # Sync Configuration with Template
@@ -318,7 +318,8 @@ Say "show [N]" to see the full diff for that section.
 ### 6. Cleanup
 
 ```bash
-rm -rf "$TEMPLATE_DIR"
+chmod -R u+w "$TEMPLATE_DIR" 2>/dev/null || true
+rm -r "$TEMPLATE_DIR"
 ```
 
 ## Output Modes

@@ -4,6 +4,7 @@ description: >
   Clean up stale git worktrees. Removes orphaned directories, merged worktrees,
   and optionally dirty worktrees (with diff preservation). Frees disk space and
   releases stale work-queue claims.
+model: haiku
 argument-hint: "[--dry-run] [--save-diffs] [--force]"
 allowed-tools: Bash(*/worktree-cleanup.sh *), Bash(git worktree *), Bash(du -sh *), Bash(git -C *), AskUserQuestion
 ---

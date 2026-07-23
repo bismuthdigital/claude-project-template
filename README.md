@@ -104,7 +104,7 @@ your-project/
 │   │   └── config-suggest.sh  # Suggests /sync-config after config edits
 │   ├── ship.json              # Ship workflow settings
 │   ├── plans/                 # Knowledge artifacts from /capture
-│   └── skills/                # 27 custom skills (see "Available Skills" below)
+│   └── skills/                # 26 custom skills (see "Available Skills" below)
 ├── bin/
 │   ├── worktree-info          # Git worktree queries
 │   ├── pr                     # GitHub PR operations
@@ -136,17 +136,16 @@ your-project/
 
 Once installed, these skills are available in Claude Code:
 
-These 27 custom skills layer on top of the built-in Claude Code skills (`/code-review`, `/simplify`, `/verify`, `/security-review`, `/deep-research`, …) — they don't replace them.
+These 26 custom skills layer on top of the built-in Claude Code skills (`/code-review`, `/simplify`, `/verify`, `/security-review`, `/deep-research`, …) — they don't replace them.
 
 | Skill | Description |
 |-------|-------------|
 | `/lint` | Run ruff check, ruff format, and mypy |
 | `/test` | Run pytest with coverage reporting |
-| `/review` | Project review lens (resiliency + venv hygiene) atop built-in `/code-review` |
+| `/project-review` | Project review lens (resiliency + venv hygiene) atop built-in `/code-review` |
 | `/bash-review` | Review bash scripts for issues |
 | `/docs` | Review documentation and comments for consistency |
 | `/check` | Full validation: lint → test → code-review → docs → bash-review |
-| `/comic` | Generate SVG explainer comics about the project |
 | `/cost-estimate` | Estimate API costs and suggest optimizations |
 | `/model-alternatives` | Find free open-source replacements for paid API calls |
 | `/prompt-review` | Review AI prompts for quality and suggest improvements |

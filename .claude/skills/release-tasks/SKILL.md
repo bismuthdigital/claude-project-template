@@ -3,6 +3,7 @@ name: release-tasks
 description: >
   Release claimed tasks back to the work queue. Use when abandoning work,
   when tasks are blocked, or for manual cleanup of stale claims.
+model: haiku
 argument-hint: "[all | <slug> | expire]"
 allowed-tools: Read, Bash(*/work-queue.sh *), AskUserQuestion
 ---

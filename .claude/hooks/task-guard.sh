@@ -17,7 +17,8 @@ esac
 
 # Only block writes to active task files (not completed/, _sections.toml, etc.)
 if [[ "$FILE_PATH" == */next-steps/active/*.md ]]; then
-    cat <<'MSG'
+    # Exit 2 blocks; the reason must go to stderr to reach the model.
+    cat >&2 <<'MSG'
 
 BLOCKED: Do not create or edit task files directly.
 

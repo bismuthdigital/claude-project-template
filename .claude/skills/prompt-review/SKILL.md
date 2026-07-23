@@ -285,7 +285,7 @@ Apply the 6-dimension framework. For each prompt produce:
 ──────────────────────────────────────
 PROMPT: src/classifier.py:42
 Type: system prompt (static)
-Model: claude-sonnet-4-6
+Model: claude-sonnet-5
 Tokens: ~340
 ──────────────────────────────────────
 
