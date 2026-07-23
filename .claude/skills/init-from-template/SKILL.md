@@ -6,7 +6,7 @@ description: >
   Works with private repos in cloud environments.
 argument-hint: "<project-name> [target-directory]"
 disable-model-invocation: true
-allowed-tools: Bash(git *), Bash(gh *), Bash(curl *), Bash(mkdir *), Bash(mv *), Bash(rm -rf *), Bash(mktemp *), Bash(tar *), Bash(cat *), Read, Edit, Write, Glob
+allowed-tools: Bash(git *), Bash(gh *), Bash(curl *), Bash(mkdir *), Bash(mv *), Bash(chmod -R u+w *), Bash(rm -r *), Bash(mktemp *), Bash(tar *), Bash(cat *), Read, Edit, Write, Glob
 ---
 
 # Initialize Project from Template
@@ -83,7 +83,7 @@ if gh auth status &>/dev/null; then
     if [ $? -eq 0 ]; then
         mkdir -p "$TARGET_DIR"
         tar -xzf "$TEMP_DIR/template.tar.gz" -C "$TARGET_DIR" --strip-components=1
-        rm -rf "$TEMP_DIR"
+        rm -r "$TEMP_DIR"
         CLONE_METHOD="gh api (tarball)"
     fi
 fi
@@ -145,7 +145,7 @@ Stop execution here if the template cannot be fetched.
 
 ```bash
 cd "$TARGET_DIR"
-rm -rf .git
+chmod -R u+w .git && rm -r .git
 ```
 
 ### 5. Customize Project

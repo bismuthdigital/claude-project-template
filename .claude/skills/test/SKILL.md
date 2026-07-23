@@ -3,6 +3,7 @@ name: test
 description: >
   Runs the test suite with pytest and coverage reporting.
   Use to verify code changes and check test coverage.
+model: haiku
 argument-hint: "[test path or -k filter]"
 allowed-tools: Bash(pytest *), Bash(python -m pytest *), Bash(python3 -m pytest *), Bash(source *)
 ---

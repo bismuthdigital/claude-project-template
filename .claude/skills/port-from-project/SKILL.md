@@ -6,7 +6,7 @@ description: >
   new or updated components, helps generalize project-specific references, and
   applies the changes. The reverse of /sync-config.
 argument-hint: "<project-path-or-name> [--skill <name>] [--script <name>] [--hook <name>] [--dry-run]"
-allowed-tools: Read, Glob, Grep, Write, Edit, Bash(git *), Bash(diff *), Bash(ls *), Bash(cat *), Bash(basename *), Bash(dirname *), Bash(wc *), Bash(mktemp *), Bash(rm -rf *), Bash(cp *), AskUserQuestion
+allowed-tools: Read, Glob, Grep, Write, Edit, Bash(git *), Bash(diff *), Bash(ls *), Bash(cat *), Bash(basename *), Bash(dirname *), Bash(wc *), Bash(mktemp *), Bash(chmod -R u+w *), Bash(rm -r *), Bash(cp *), AskUserQuestion
 ---
 
 # Port from Downstream Project

@@ -3,6 +3,7 @@ name: lint
 description: >
   Runs Python linters and formatters (ruff, black, mypy) on the codebase.
   Use to check and fix code style issues.
+model: haiku
 argument-hint: "[path or empty for entire project]"
 allowed-tools: Bash(ruff *), Bash(black *), Bash(mypy *), Bash(python -m *), Bash(source *)
 ---

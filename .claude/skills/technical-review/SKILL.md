@@ -6,7 +6,9 @@ description: >
   risks, test strategy), and writes them to a shared directory. Designed to
   run as a standalone review agent.
 argument-hint: "[N | <task-id> | check [--all]]"
-allowed-tools: Read, Glob, Grep, Bash(git *), Bash(scripts/task-format.py *), Bash(.venv/bin/python scripts/task-format.py *), Bash(.venv/bin/python scripts/task-board.py *), Bash(scripts/work-queue.sh *), Bash(./bin/worktree-info *), Write, Task
+context: fork
+agent: general-purpose
+allowed-tools: Read, Glob, Grep, Bash(git *), Bash(scripts/task-format.py *), Bash(.venv/bin/python scripts/task-format.py *), Bash(.venv/bin/python scripts/task-board.py *), Bash(scripts/work-queue.sh *), Bash(./bin/worktree-info *), Write, Agent
 ---
 
 # Technical Review
