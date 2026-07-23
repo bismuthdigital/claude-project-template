@@ -17,7 +17,8 @@ esac
 
 # Check if the command contains [skip ci] or [ci skip] (case-insensitive)
 if echo "$COMMAND" | grep -qi '\[skip ci\]\|\[ci skip\]\|\[no ci\]'; then
-  echo "BLOCKED: Commit message contains [skip ci]. CI must run on every commit — required checks will never report otherwise, blocking merge indefinitely. Remove the skip directive."
+  # Exit 2 blocks; the reason must go to stderr to reach the model.
+  echo "BLOCKED: Commit message contains [skip ci]. CI must run on every commit — required checks will never report otherwise, blocking merge indefinitely. Remove the skip directive." >&2
   exit 2
 fi
 

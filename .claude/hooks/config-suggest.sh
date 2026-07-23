@@ -1,15 +1,17 @@
 #!/bin/bash
 # PostToolUse hook: Suggest /sync-config when Claude config files are edited
 # Runs after Edit operations on .claude/ files
+#
+# Emits hookSpecificOutput.additionalContext — the documented channel for
+# getting text into the model's context from a PostToolUse hook (plain
+# stdout is not fed back to the model).
 
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
 # Only trigger for .claude/ configuration files
 if [[ "$FILE_PATH" != *.claude/settings.json ]] && \
-   [[ "$FILE_PATH" != *.claude/hooks/* ]] && \
-   [[ "$FILE_PATH" != */.claude/settings.json ]] && \
-   [[ "$FILE_PATH" != */.claude/hooks/* ]]; then
+   [[ "$FILE_PATH" != *.claude/hooks/* ]]; then
     exit 0
 fi
 
@@ -18,7 +20,8 @@ if [[ "$FILE_PATH" == *skills* ]]; then
     exit 0
 fi
 
-echo ""
-echo "Tip: Configuration file modified. Run /sync-config to compare against the official template."
+cat <<'JSON'
+{"hookSpecificOutput": {"hookEventName": "PostToolUse", "additionalContext": "Configuration file modified. Run /sync-config to compare against the official template."}}
+JSON
 
 exit 0

@@ -4,7 +4,9 @@
 # Each worktree gets its own .venv so concurrent agents don't clobber
 # each other's editable installs via the shared .pth file. This script
 # is called automatically by worktree-check.sh on the first Python
-# command in a new worktree.
+# command in a new worktree, and is the single implementation of
+# create/verify/fix — worktree-check.sh caches a successful run via a
+# stamp file so this only re-runs when site-packages changes.
 #
 # Usage:
 #   bash .claude/hooks/worktree-setup.sh [worktree-dir]
