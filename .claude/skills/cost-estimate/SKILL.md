@@ -186,7 +186,7 @@ Estimate costs for common developer workflows in this project:
 | Feature development | Multi-file changes, review, test | ~$X.XX |
 | Full validation (`/check`) | Lint + test + review + docs | ~$X.XX |
 | Ship (`/ship`) | Commit + PR + merge | ~$X.XX |
-| Code review (`/review`) | Review recent changes | ~$X.XX |
+| Code review (`/code-review`) | Review the working diff | ~$X.XX |
 | Cost estimate (`/cost-estimate`) | This skill | ~$X.XX |
 
 ## Optimization Recommendations

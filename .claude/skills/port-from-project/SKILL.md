@@ -278,5 +278,5 @@ When `--skill`, `--script`, or `--hook` filters are provided:
 |-------|-------------|
 | `/sync-config` | Reverse direction — pushes template changes down to projects |
 | `/ship` | Ship the ported changes after review |
-| `/review` | Review ported code for quality before committing |
+| `/code-review` | Review ported code for quality before committing |
 | `/simplify` | Check ported code for anti-patterns (built-in) |

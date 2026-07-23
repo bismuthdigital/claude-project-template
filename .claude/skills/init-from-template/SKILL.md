@@ -191,7 +191,7 @@ Next steps:
 Available skills:
   /lint           - Run linters and formatters
   /test           - Run tests with coverage
-  /review         - Code review for issues
+  /project-review - Resiliency + venv-hygiene review lens
   /bash-review    - Review bash scripts for issues
   /docs           - Review documentation and comments
   /check          - Full validation pipeline

@@ -47,8 +47,9 @@ Run the built-in **`/code-review`** for correctness bugs plus reuse/efficiency
 across the changed code. For large diffs it has a cloud multi-agent `ultra`
 mode — prefer that over hand-rolling parallel agents here.
 
-Then run the project **`/review [path or recent]`** lens for the two checks the
-built-in does not cover: resiliency/recovery and virtual-environment hygiene.
+Then run the project **`/project-review [path or recent]`** lens for the two
+checks the built-in does not cover: resiliency/recovery and
+virtual-environment hygiene.
 
 ### Step 4: Docs
 Run `/docs check [path]` to verify documentation consistency.

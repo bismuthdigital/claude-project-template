@@ -1,7 +1,7 @@
 ## What
 
 Reusable Claude Code configuration template for Python projects. Provides
-permissions, auto-linting hooks, code review workflows, and 27 custom skills.
+permissions, auto-linting hooks, code review workflows, and 26 custom skills.
 
 ## Setup
 
@@ -48,7 +48,7 @@ mypy src/                   Type check source code
 ```
 /lint                       Run linters and formatters
 /test                       Run tests with coverage
-/review                     Code review for bugs and issues
+/project-review             Resiliency + venv-hygiene review lens
 /check                      Full validation pipeline
 /ship                       Commit, PR, merge, and sync
 /claim-tasks                Claim tasks + auto-create worktree
